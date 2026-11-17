@@ -8,6 +8,10 @@ import {
   formatToman,
   toPersianDigits,
 } from "../utils/formatters";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../data/courseAssets";
 import type { CourseSummary, OrderRecord, PublicUser } from "../types";
 import { toast } from "sonner";
 import {
@@ -242,9 +246,12 @@ export function DashboardPage() {
                   className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/75 flex flex-col"
                 >
                   <img
-                    src={course.thumbnail}
+                    src={resolveCourseThumbnail(course.thumbnail)}
                     alt={course.title}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                    }}
                     className="aspect-video w-full object-cover bg-slate-950"
                   />
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
@@ -297,9 +304,12 @@ export function DashboardPage() {
                 >
                   <div className="flex items-center gap-3">
                     <img
-                      src={item.thumbnail}
+                      src={resolveCourseThumbnail(item.thumbnail)}
                       alt={item.title}
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                      }}
                       className="h-16 w-24 rounded-xl object-cover shrink-0"
                     />
                     <div className="min-w-0">

@@ -11,6 +11,10 @@ import {
   toPersianDigits,
 } from "../utils/formatters";
 import { calculateDiscountPercent } from "../utils/pricing";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../data/courseAssets";
 import type { CourseDetail, LessonItem } from "../types";
 import { toast } from "sonner";
 import {
@@ -211,9 +215,12 @@ export function CourseDetailPage({ slug }: { slug: string }) {
           <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
             <div className="relative aspect-video w-full bg-slate-950">
               <img
-                src={course.thumbnail}
+                src={resolveCourseThumbnail(course.thumbnail)}
                 alt={course.title}
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                }}
                 className="h-full w-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent flex items-end p-6">

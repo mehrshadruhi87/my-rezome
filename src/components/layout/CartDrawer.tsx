@@ -2,6 +2,10 @@ import React from "react";
 import { Link } from "../../router";
 import { useStore } from "../../store/useStore";
 import { formatToman, toPersianDigits } from "../../utils/formatters";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../../data/courseAssets";
 import { ArrowLeft, ShoppingBag, Trash2, X } from "lucide-react";
 
 export function CartDrawer() {
@@ -76,9 +80,12 @@ export function CartDrawer() {
                     className="flex items-center gap-3.5 rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
                   >
                     <img
-                      src={item.thumbnail}
+                      src={resolveCourseThumbnail(item.thumbnail)}
                       alt={item.title}
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                      }}
                       className="h-16 w-20 rounded-xl object-cover shrink-0 bg-slate-900"
                     />
                     <div className="min-w-0 flex-1">

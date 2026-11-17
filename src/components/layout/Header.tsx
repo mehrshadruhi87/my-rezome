@@ -3,6 +3,10 @@ import { Link, useRouter } from "../../router";
 import { useAuth } from "../../context/AuthContext";
 import { useStore } from "../../store/useStore";
 import { apiRequest } from "../../lib/api";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../../data/courseAssets";
 import { formatToman, toPersianDigits } from "../../utils/formatters";
 import type { CourseSummary } from "../../types";
 import {
@@ -214,9 +218,12 @@ export function Header() {
                       className="flex items-center gap-3 p-3 hover:bg-slate-800/70 transition-colors"
                     >
                       <img
-                        src={item.thumbnail}
+                        src={resolveCourseThumbnail(item.thumbnail)}
                         alt={item.title}
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                        }}
                         className="h-11 w-16 rounded-lg object-cover shrink-0 bg-slate-950"
                       />
                       <div className="min-w-0 flex-1">

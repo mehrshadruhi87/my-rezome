@@ -3,6 +3,10 @@ import { Link, useRouter } from "../router";
 import { useStore } from "../store/useStore";
 import { apiRequest } from "../lib/api";
 import { formatToman, toPersianDigits } from "../utils/formatters";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../data/courseAssets";
 import type { AppliedCoupon } from "../types";
 import { toast } from "sonner";
 import { ArrowLeft, ShoppingBag, Tag, Trash2, X } from "lucide-react";
@@ -82,9 +86,12 @@ export function CartPage() {
             >
               <div className="flex items-center gap-4 min-w-0">
                 <img
-                  src={item.thumbnail}
+                  src={resolveCourseThumbnail(item.thumbnail)}
                   alt={item.title}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                  }}
                   className="h-20 w-28 rounded-xl object-cover shrink-0 bg-slate-950"
                 />
                 <div className="min-w-0">

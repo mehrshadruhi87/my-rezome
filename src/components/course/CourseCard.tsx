@@ -8,6 +8,10 @@ import {
   toPersianDigits,
 } from "../../utils/formatters";
 import { calculateDiscountPercent } from "../../utils/pricing";
+import {
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../../data/courseAssets";
 import type { CourseSummary } from "../../types";
 import { toast } from "sonner";
 import {
@@ -75,12 +79,18 @@ export function CourseCard({ course }: CourseCardProps) {
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/75 transition-transform duration-200 hover:-translate-y-0.5 hover:border-indigo-500/50">
       <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
         <Link href={`/courses/${course.slug}`} className="block h-full w-full">
-          {!imgError && course.thumbnail ? (
+          {!imgError ? (
             <img
-              src={course.thumbnail}
+              src={resolveCourseThumbnail(course.thumbnail)}
               alt={course.title}
               referrerPolicy="no-referrer"
-              onError={() => setImgError(true)}
+              onError={(e) => {
+                if (e.currentTarget.src !== DEFAULT_COURSE_THUMBNAIL) {
+                  e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                } else {
+                  setImgError(true);
+                }
+              }}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (

@@ -25,9 +25,9 @@ export function HomePage() {
 
   useEffect(() => {
     let active = true;
-    apiRequest<{ courses: CourseSummary[] }>("/api/courses?sort=popular")
+    apiRequest<{ courses: CourseSummary[] }>("/api/courses?sort=newest")
       .then((res) => {
-        if (active) setFeaturedCourses(res.courses.slice(0, 6));
+        if (active) setFeaturedCourses(res.courses.slice(0, 9));
       })
       .catch(() => {
         if (active) setFeaturedCourses([]);

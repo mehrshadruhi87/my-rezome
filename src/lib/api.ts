@@ -1,4 +1,8 @@
-const AUTH_TOKEN_KEY = "codeacademy_auth_token";
+import {
+  AUTH_TOKEN_KEY,
+  LocalApiError,
+  dispatchLocalApiRequest,
+} from "./localBackend";
 
 export function getAuthToken(): string | null {
   try {
@@ -36,18 +40,15 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401) {
+  try {
+    return await dispatchLocalApiRequest<T>(url, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    if (err instanceof LocalApiError && err.status === 401) {
       setAuthToken(null);
     }
-    throw new Error(data.error || "خطایی در ارتباط با سرور رخ داد.");
+    throw err;
   }
-  return data as T;
 }

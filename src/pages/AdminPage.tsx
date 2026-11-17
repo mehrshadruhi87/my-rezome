@@ -8,6 +8,11 @@ import {
   getLevelInfo,
   toPersianDigits,
 } from "../utils/formatters";
+import {
+  COURSE_THUMBNAIL_PRESETS,
+  DEFAULT_COURSE_THUMBNAIL,
+  resolveCourseThumbnail,
+} from "../data/courseAssets";
 import type {
   ChapterItem,
   CourseLevel,
@@ -160,7 +165,7 @@ export function AdminPage() {
       slug: "",
       shortDesc: "",
       description: "",
-      thumbnail: "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+      thumbnail: COURSE_THUMBNAIL_PRESETS[0].legacyPath,
       price: 2500000,
       discountPrice: "",
       level: "ALL_LEVELS",
@@ -1113,6 +1118,68 @@ export function AdminPage() {
                     }
                     className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white"
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="course-thumbnail-preset"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    تصویر کاور دوره
+                  </label>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <img
+                      src={resolveCourseThumbnail(courseForm.thumbnail)}
+                      alt={courseForm.title || "پیش‌نمایش کاور"}
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_COURSE_THUMBNAIL;
+                      }}
+                      className="h-14 w-24 rounded-xl object-cover border border-slate-800 bg-slate-950 shrink-0"
+                    />
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        id="course-thumbnail-preset"
+                        value={
+                          COURSE_THUMBNAIL_PRESETS.some(
+                            (p) => p.legacyPath === courseForm.thumbnail
+                          )
+                            ? courseForm.thumbnail
+                            : "custom"
+                        }
+                        onChange={(e) => {
+                          if (e.target.value !== "custom") {
+                            setCourseForm({
+                              ...courseForm,
+                              thumbnail: e.target.value,
+                            });
+                          }
+                        }}
+                        className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white"
+                      >
+                        {COURSE_THUMBNAIL_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.legacyPath}>
+                            طرح آماده: {preset.label}
+                          </option>
+                        ))}
+                        <option value="custom">آدرس تصویر دلخواه</option>
+                      </select>
+                      <input
+                        id="course-thumbnail-url"
+                        type="text"
+                        dir="ltr"
+                        aria-label="آدرس تصویر کاور دوره"
+                        value={courseForm.thumbnail}
+                        onChange={(e) =>
+                          setCourseForm({
+                            ...courseForm,
+                            thumbnail: e.target.value,
+                          })
+                        }
+                        placeholder="https://..."
+                        className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
