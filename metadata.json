@@ -1,0 +1,8 @@
+{
+  "name": "کدآکادمی | CodeAcademy",
+  "description": "پلتفرم جامع آموزش برنامه‌نویسی، هوش مصنوعی، امنیت شبکه و بوت‌کمپ‌های تخصصی به زبان فارسی (RTL)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

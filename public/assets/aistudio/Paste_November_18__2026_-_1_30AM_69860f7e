@@ -1,0 +1,2892 @@
+Here is the complete, production-ready, full-stack Persian (RTL) Programming
+Academy & E-Commerce Platform (کدآکادمی | CodeAcademy) built with Next.js 15
+(App Router), TypeScript, Tailwind CSS, Prisma ORM, NextAuth.js (RBAC), and
+Zustand.
+
+1. Project Setup, Dependencies & Environment
+
+package.json
+
+{
+  "name": "code-academy-rtl",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.473.0",
+    "next": "^15.1.6",
+    "next-auth": "^4.24.11",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sonner": "^1.7.4",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "postcss": "^8.5.1",
+    "prisma": "^6.2.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
+
+.env
+
+# Use SQLite for instant zero-config local execution, or swap to postgresql://user:pass@localhost:5432/codeacademy
+DATABASE_URL="file:./dev.db"
+NEXTAUTH_SECRET="super-secret-persian-coding-academy-key-2026"
+NEXTAUTH_URL="http://localhost:3000"
+
+2. Database Schema & Seed Data (prisma/)
+
+prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Change to "postgresql" for production PostgreSQL deployment
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         String       @default("STUDENT") // "ADMIN" | "STUDENT"
+  avatar       String?
+  bio          String?
+  phone        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  orders       Order[]
+  enrollments  Enrollment[]
+  reviews      Review[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  icon        String   @default("Code2")
+  description String?
+  courses     Course[]
+  createdAt   DateTime @default(now())
+}
+
+model Course {
+  id              String       @id @default(cuid())
+  title           String
+  slug            String       @unique
+  shortDesc       String
+  description     String
+  thumbnail       String
+  previewVideoUrl String
+  price           Int          // Price in Tomans (0 = Free)
+  discountPrice   Int?         // Discounted price in Tomans
+  level           String       @default("ALL_LEVELS") // BEGINNER | INTERMEDIATE | ADVANCED | ALL_LEVELS
+  duration        String       // e.g., "۴۸ ساعت"
+  prerequisites   String       @default("آشنایی مقدماتی با کامپیوتر")
+  language        String       @default("فارسی")
+  instructorName  String
+  instructorTitle String       @default("مهندس ارشد نرم‌افزار")
+  instructorBio   String       @default("مدرس و معمار سیستم‌های نرم‌افزاری با بیش از ۱۰ سال سابقه در پروژه‌های مقیاس‌پذیر.")
+  isPublished     Boolean      @default(true)
+  isFeatured      Boolean      @default(false)
+  studentsCount   Int          @default(0)
+  rating          Float        @default(4.9)
+  categoryId      String
+  category        Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  chapters        Chapter[]
+  orderItems      OrderItem[]
+  enrollments     Enrollment[]
+  reviews         Review[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Chapter {
+  id        String   @id @default(cuid())
+  title     String
+  position  Int      @default(1)
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons   Lesson[]
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  duration    String   @default("۱۵:۰۰")
+  videoUrl    String
+  isFree      Boolean  @default(false)
+  position    Int      @default(1)
+  chapterId   String
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, courseId])
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalAmount    Int         // Original sum in Tomans
+  discountAmount Int         @default(0)
+  finalAmount    Int         // Final paid in Tomans
+  status         String      @default("PENDING") // PENDING | COMPLETED | FAILED
+  paymentRef     String?     // ZarinPal / Shaparak tracking code
+  couponCode     String?
+  items          OrderItem[]
+  createdAt      DateTime    @default(now())
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  price    Int
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      @default(5)
+  comment   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model DiscountCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  type      String    @default("PERCENTAGE") // PERCENTAGE | FIXED
+  value     Int       // e.g., 25 for 25% or 500000 for 500,000 Tomans
+  maxUses   Int       @default(100)
+  usedCount Int       @default(0)
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+}
+
+prisma/seed.ts
+
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("🌱 شروع مقداردهی اولیه پایگاه داده کدآکادمی...");
+
+  await prisma.review.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.enrollment.deleteMany();
+  await prisma.lesson.deleteMany();
+  await prisma.chapter.deleteMany();
+  await prisma.course.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.discountCode.deleteMany();
+  await prisma.user.deleteMany();
+
+  // 1. Users (Admin + Demo Student)
+  const adminPassword = await bcrypt.hash("Admin1234!", 10);
+  const studentPassword = await bcrypt.hash("Student1234!", 10);
+
+  const admin = await prisma.user.create({
+    data: {
+      name: "مهندس آرش رادمنش (مدیر سیستم)",
+      email: "admin@academy.ir",
+      passwordHash: adminPassword,
+      role: "ADMIN",
+      phone: "09121112233",
+      bio: "معمار ارشد نرم‌افزار و بنیان‌گذار کدآکادمی",
+    },
+  });
+
+  const student = await prisma.user.create({
+    data: {
+      name: "سارا محمدی",
+      email: "student@academy.ir",
+      passwordHash: studentPassword,
+      role: "STUDENT",
+      phone: "09123334455",
+      bio: "توسعه‌دهنده فرانت‌اند و علاقه‌مند به هوش مصنوعی",
+    },
+  });
+
+  // 2. Categories
+  const categoriesData = [
+    { name: "توسعه فرانت‌اند", slug: "frontend", icon: "Layout", description: "React, Next.js, Vue, TypeScript و طراحی رابط کاربری مدرن" },
+    { name: "توسعه بک‌اند", slug: "backend", icon: "Server", description: "Node.js, NestJS, Go, Python Django, .NET و معماری میکروسرویس" },
+    { name: "هوش مصنوعی و دیتا", slug: "ai-data", icon: "BrainCircuit", description: "یادگیری ماشین، دیپ لرنینگ، LLM، پایتون و مهندسی داده" },
+    { name: "امنیت شبکه و هک قانونمند", slug: "cybersecurity", icon: "ShieldCheck", description: "تست نفوذ وب، امنیت شبکه، DevSecOps و تحلیل بدافزار" },
+    { name: "برنامه‌نویسی موبایل", slug: "mobile", icon: "Smartphone", description: "Flutter, React Native, Kotlin و توسعه اپلیکیشن‌های کراس‌پلتفرم" },
+    { name: "دوآپس و کلود", slug: "devops", icon: "CloudCog", description: "Docker, Kubernetes, CI/CD, Linux و زیرساخت ابری" },
+  ];
+
+  const categories: Record<string, string> = {};
+  for (const cat of categoriesData) {
+    const created = await prisma.category.create({ data: cat });
+    categories[cat.slug] = created.id;
+  }
+
+  // 3. Courses with Complete Chapters & Lessons
+  const sampleVideo = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+  const coursesData = [
+    {
+      title: "بوت‌کمپ جامع Next.js 15، React 19 و معماری فول‌استک سازمانی",
+      slug: "nextjs-15-fullstack-bootcamp",
+      shortDesc: "آموزش پروژه محور ساخت اپلیکیشن‌های مقیاس‌پذیر با Next.js 15 App Router، Server Actions، Prisma و TypeScript.",
+      description: "در این دوره فوق‌پیشرفته و کاملا پروژه‌محور، از مفاهیم پایه React 19 و رندرینگ سمت سرور (SSR/ISR) شروع کرده و تا پیاده‌سازی کامل یک پلتفرم فروشگاهی و SaaS با Next.js 15 پیش می‌رویم. تمامی مباحث امنیتی، احراز هویت، کشینگ پیشرفته و استقرار روی Docker پوشش داده شده است.",
+      thumbnail: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 4800000,
+      discountPrice: 3450000,
+      level: "ALL_LEVELS",
+      duration: "۶۴ ساعت",
+      prerequisites: "آشنایی با جاوااسکریپت و مبانی ری‌اکت",
+      instructorName: "دکتر کیوان نادری",
+      instructorTitle: "معمار ارشد فرانت‌اند در اسنپ",
+      instructorBio: "بیش از ۱۱ سال تجربه تخصصی در مهندسی فرانت‌اند، مدرس بیش از ۲۰ هزار دانشجو در سراسر کشور.",
+      isPublished: true,
+      isFeatured: true,
+      studentsCount: 1420,
+      rating: 4.9,
+      categoryId: categories["frontend"],
+      chapters: [
+        {
+          title: "فصل اول: معماری مدرن وب و هسته Next.js 15",
+          position: 1,
+          lessons: [
+            { title: "معرفی دوره، نقشه راه و بررسی پروژه نهایی", duration: "۱۸:۲۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "تفاوت عمیق Server Components و Client Components", duration: "۳۲:۱۰", videoUrl: sampleVideo, isFree: true, position: 2 },
+            { title: "معماری فولدرها، Dynamic Routes و Parallel Routes", duration: "۴۵:۰۰", videoUrl: sampleVideo, isFree: false, position: 3 },
+          ],
+        },
+        {
+          title: "فصل دوم: کار با پایگاه داده، Prisma ORM و Server Actions",
+          position: 2,
+          lessons: [
+            { title: "طراحی اسکیماهای رابطه‌ای پیچیده با Prisma و PostgreSQL", duration: "۳۸:۱۵", videoUrl: sampleVideo, isFree: false, position: 1 },
+            { title: "پیاده‌سازی Mutations امن با Server Actions و اعتبارسنجی", duration: "۵۰:۴۰", videoUrl: sampleVideo, isFree: false, position: 2 },
+            { title: "مدیریت Optimistic UI و کشینگ لایه‌ای در Next.js 15", duration: "۴۱:۰۰", videoUrl: sampleVideo, isFree: false, position: 3 },
+          ],
+        },
+        {
+          title: "فصل سوم: احراز هویت، درگاه پرداخت و دیپلوی پروداکشن",
+          position: 3,
+          lessons: [
+            { title: "پیاده‌سازی RBAC و احراز هویت چندمرحله‌ای با Auth.js", duration: "۵۵:۲۰", videoUrl: sampleVideo, isFree: false, position: 1 },
+            { title: "اتصال به درگاه پرداخت زرین‌پال و مدیریت تراکنش‌ها", duration: "۴۰:۱۰", videoUrl: sampleVideo, isFree: false, position: 2 },
+          ],
+        },
+      ],
+    },
+    {
+      title: "متخصص هوش مصنوعی، پایتون، LLM و مهندسی ایجنت‌های هوشمند",
+      slug: "python-ai-llm-engineering",
+      shortDesc: "از مبانی پایتون و یادگیری ماشین تا ساخت سیستم‌های RAG، فاین‌تیون مدل‌های زبانی و ایجنت‌های خودکار.",
+      description: "این بوت‌کمپ جامع شما را از سطح مقدماتی پایتون به یک مهندس هوش مصنوعی آماده ورود به بازار کار تبدیل می‌کند. کار با PyTorch، LangChain، پایگاه‌داده‌های برداری (Vector DB) و پیاده‌سازی دستیارهای هوشمند فارسی را به صورت عملی یاد می‌گیرید.",
+      thumbnail: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 5900000,
+      discountPrice: 4200000,
+      level: "ALL_LEVELS",
+      duration: "۷۸ ساعت",
+      prerequisites: "بدون پیش‌نیاز (شروع از صفر پایتون)",
+      instructorName: "دکتر امیرحسین فرهادی",
+      instructorTitle: "پژوهشگر ارشد هوش مصنوعی و پردازش زبان طبیعی",
+      instructorBio: "دکترای هوش مصنوعی از دانشگاه صنعتی شریف و مشاور تیم‌های داده‌کاوی بانکی.",
+      isPublished: true,
+      isFeatured: true,
+      studentsCount: 1890,
+      rating: 5.0,
+      categoryId: categories["ai-data"],
+      chapters: [
+        {
+          title: "فصل اول: پایتون پیشرفته برای علوم داده و هوش مصنوعی",
+          position: 1,
+          lessons: [
+            { title: "نقشه راه مهندسی AI و آماده‌سازی محیط Jupyter و CUDA", duration: "۲۲:۰۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "پردازش ماتریسی سریع با NumPy و تحلیل داده با Pandas", duration: "۴۹:۳۰", videoUrl: sampleVideo, isFree: true, position: 2 },
+          ],
+        },
+        {
+          title: "فصل دوم: شبکه‌های عصبی عمیق و معماری Transformer",
+          position: 2,
+          lessons: [
+            { title: "پیاده‌سازی شبکه عصبی از صفر با PyTorch", duration: "۵۸:۰۰", videoUrl: sampleVideo, isFree: false, position: 1 },
+            { title: "کالبدشکافی مکانیزم Attention و مدل‌های زبانی بزرگ (LLM)", duration: "۶۴:۱۰", videoUrl: sampleVideo, isFree: false, position: 2 },
+          ],
+        },
+        {
+          title: "فصل سوم: مهندسی RAG، LangChain و ایجنت‌های سازمانی",
+          position: 3,
+          lessons: [
+            { title: "ساخت سیستم پرسش و پاسخ روی اسناد فارسی با Vector DB", duration: "۵۲:۴۵", videoUrl: sampleVideo, isFree: false, position: 1 },
+          ],
+        },
+      ],
+    },
+    {
+      title: "معماری میکروسرویس و بک‌اند مقیاس‌پذیر با Node.js، NestJS و RabbitMQ",
+      slug: "nestjs-microservices-architecture",
+      shortDesc: "طراحی سیستم‌های توزیع‌شده، Event-Driven Architecture، Redis، کلین آرکیتکچر و تست‌نویسی حرفه‌ای.",
+      description: "اگر می‌خواهید از یک برنامه‌نویس معمولی بک‌اند به یک Senior Backend Engineer تبدیل شوید، این دوره دقیقا برای شما طراحی شده است. پیاده‌سازی سیستم بانکی و سفارش‌گیری با قابلیت تحمل میلیون‌ها درخواست.",
+      thumbnail: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 4200000,
+      discountPrice: 2990000,
+      level: "ADVANCED",
+      duration: "۵۲ ساعت",
+      prerequisites: "آشنایی با جاوااسکریپت/تایپ‌اسکریپت و مفاهیم پایه بک‌اند",
+      instructorName: "مهندس پویا رستمی",
+      instructorTitle: "لید فنی بک‌اند",
+      instructorBio: "توسعه‌دهنده سیستم‌های پرترافیک فین‌تک و مدرس معماری نرم‌افزار.",
+      isPublished: true,
+      isFeatured: true,
+      studentsCount: 940,
+      rating: 4.8,
+      categoryId: categories["backend"],
+      chapters: [
+        {
+          title: "فصل اول: معماری تمیز (DDD & Clean Architecture) در NestJS",
+          position: 1,
+          lessons: [
+            { title: "چرا مونولیت‌ها شکست می‌خورند؟ ورود به دنیای میکروسرویس", duration: "۲۵:۱۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "پیاده‌سازی Dependency Injection و لایه‌بندی Domain", duration: "۴۴:۲۰", videoUrl: sampleVideo, isFree: false, position: 2 },
+          ],
+        },
+      ],
+    },
+    {
+      title: "متخصص تست نفوذ وب و باگ بانتی (OSWE & Bug Bounty Hunter)",
+      slug: "web-penetration-testing-bug-bounty",
+      shortDesc: "کشف آسیب‌پذیری‌های بحرانی وب، OWASP Top 10 پیشرفته، دور زدن WAF و کسب درآمد دلاری از باگ بانتی.",
+      description: "آموزش صددرصد عملی هک قانونمند و امنیت وب‌اپلیکیشن‌ها روی آزمایشگاه‌های واقعی. از SQL Injection و XSS پیشرفته تا SSRF، Deserialization و تحلیل کد منبع.",
+      thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 5100000,
+      discountPrice: 3800000,
+      level: "INTERMEDIATE",
+      duration: "۶۰ ساعت",
+      prerequisites: "آشنایی مقدماتی با شبکه و پروتکل HTTP",
+      instructorName: "مهندس سهراب کاظمی",
+      instructorTitle: "محقق ارشد امنیت سایبری",
+      instructorBio: "شکارچی باگ در پلتفرم‌های HackerOne و Bugcrowd با بیش از ۲۰۰ گزارش معتبر.",
+      isPublished: true,
+      isFeatured: true,
+      studentsCount: 1150,
+      rating: 4.9,
+      categoryId: categories["cybersecurity"],
+      chapters: [
+        {
+          title: "فصل اول: متدولوژی Recon و شناسایی سطح حمله",
+          position: 1,
+          lessons: [
+            { title: "معرفی لابراتوار دوره و ابزارهای Burp Suite Pro", duration: "۲۹:۰۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "اتوماسیون فرآیند Subdomain Enumeration و اسکن سرویس‌ها", duration: "۴۷:۱۵", videoUrl: sampleVideo, isFree: false, position: 2 },
+          ],
+        },
+      ],
+    },
+    {
+      title: "آموزش جامع Docker، Kubernetes و مهندسی DevOps در پروداکشن",
+      slug: "devops-docker-kubernetes-masterclass",
+      shortDesc: "کانتینرسازی، ارکستریشن کلاسترهای کوبرنتیز، GitLab CI/CD، مانیتورینگ Prometheus و Grafana.",
+      description: "صفر تا صد زیرساخت مدرن ابری و اتوماسیون استقرار نرم‌افزار. یاد بگیرید چگونه سرویس‌های بدون قطعی (Zero-Downtime) را روی سرورهای لینوکسی و کلود مدیریت کنید.",
+      thumbnail: "https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 3900000,
+      discountPrice: 2850000,
+      level: "INTERMEDIATE",
+      duration: "۴۶ ساعت",
+      prerequisites: "آشنایی با دستورات پایه لینوکس",
+      instructorName: "مهندس نیما شریفی",
+      instructorTitle: "مهندس ارشد SRE و زیرساخت ابری",
+      instructorBio: "مدیر زیرساخت ابری با تجربه مدیریت کلاسترهای بیش از ۲۰۰ نود.",
+      isPublished: true,
+      isFeatured: false,
+      studentsCount: 780,
+      rating: 4.8,
+      categoryId: categories["devops"],
+      chapters: [
+        {
+          title: "فصل اول: تسلط کامل بر Docker و بهینه‌سازی ایمیج‌ها",
+          position: 1,
+          lessons: [
+            { title: "معماری هسته لینوکس، Namespaces و Cgroups", duration: "۲۰:۳۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "نوشتن Multi-stage Dockerfile استاندارد برای پروداکشن", duration: "۳۶:۰۰", videoUrl: sampleVideo, isFree: false, position: 2 },
+          ],
+        },
+      ],
+    },
+    {
+      title: "مبانی الگوریتم، ساختمان داده و آمادگی مصاحبه شرکت‌های بزرگ",
+      slug: "algorithms-data-structures-free",
+      shortDesc: "دوره رایگان تقویت تفکر الگوریتمی، پیچیدگی زمانی Big-O، درخت‌ها، گراف‌ها و برنامه‌نویسی پویا.",
+      description: "پایه و اساس هر برنامه‌نویس حرفه‌ای، درک عمیق ساختمان داده و الگوریتم است. این دوره به صورت کاملا رایگان برای ارتقای سطح علمی جامعه برنامه‌نویسان ایران منتشر شده است.",
+      thumbnail: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&w=1000&q=80",
+      previewVideoUrl: sampleVideo,
+      price: 0,
+      discountPrice: 0,
+      level: "BEGINNER",
+      duration: "۲۴ ساعت",
+      prerequisites: "آشنایی اولیه با یک زبان برنامه‌نویسی",
+      instructorName: "دکتر کیوان نادری",
+      instructorTitle: "معمار ارشد نرم‌افزار",
+      instructorBio: "مدرس دوره‌های مهندسی نرم‌افزار و الگوریتم.",
+      isPublished: true,
+      isFeatured: false,
+      studentsCount: 3410,
+      rating: 5.0,
+      categoryId: categories["backend"],
+      chapters: [
+        {
+          title: "فصل اول: تحلیل پیچیدگی زمانی و فضایی (Big-O)",
+          position: 1,
+          lessons: [
+            { title: "تحلیل کارایی الگوریتم‌ها و مقایسه ساختارهای حافظه", duration: "۳۱:۰۰", videoUrl: sampleVideo, isFree: true, position: 1 },
+            { title: "آرایه‌ها، لیست‌های پیوندی و تکنیک Two Pointers", duration: "۴۲:۱۰", videoUrl: sampleVideo, isFree: true, position: 2 },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const createdCourses = [];
+  for (const c of coursesData) {
+    const { chapters, ...courseFields } = c;
+    const course = await prisma.course.create({
+      data: {
+        ...courseFields,
+        chapters: {
+          create: chapters.map((ch) => ({
+            title: ch.title,
+            position: ch.position,
+            lessons: {
+              create: ch.lessons,
+            },
+          })),
+        },
+      },
+    });
+    createdCourses.push(course);
+  }
+
+  // 4. Discount Codes
+  await prisma.discountCode.createMany({
+    data: [
+      { code: "BAHAR30", type: "PERCENTAGE", value: 30, maxUses: 200, usedCount: 14, isActive: true },
+      { code: "WELCOME500", type: "FIXED", value: 500000, maxUses: 100, usedCount: 8, isActive: true },
+    ],
+  });
+
+  // 5. Enrollments, Sample Order & Verified Reviews for Demo Student
+  await prisma.enrollment.create({
+    data: {
+      userId: student.id,
+      courseId: createdCourses[0].id,
+    },
+  });
+
+  await prisma.order.create({
+    data: {
+      orderNumber: "ORD-140401",
+      userId: student.id,
+      totalAmount: 4800000,
+      discountAmount: 1350000,
+      finalAmount: 3450000,
+      status: "COMPLETED",
+      paymentRef: "ZP-98451203",
+      items: {
+        create: [
+          {
+            courseId: createdCourses[0].id,
+            price: 3450000,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.review.createMany({
+    data: [
+      {
+        userId: student.id,
+        courseId: createdCourses[0].id,
+        rating: 5,
+        comment: "بهترین و عمیق‌ترین دوره Next.js به زبان فارسی! بخش Server Actions و معماری Prisma واقعا دید من رو به فول‌استک عوض کرد.",
+      },
+      {
+        userId: admin.id,
+        courseId: createdCourses[1].id,
+        rating: 5,
+        comment: "پروژه‌های عملی بخش LLM و LangChain کاملا منطبق بر نیاز روز شرکت‌هاست.",
+      },
+    ],
+  });
+
+  console.log("✅ پایگاه داده با موفقیت مقداردهی شد!");
+  console.log("🔑 اکانت مدیر: admin@academy.ir / Admin1234!");
+  console.log("🔑 اکانت دانشجو: student@academy.ir / Student1234!");
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+
+3. Core Utilities, Prisma Singleton & Authentication (src/lib/)
+
+src/lib/prisma.ts
+
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+src/lib/utils.ts
+
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export function toPersianDigits(num: number | string): string {
+  const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+  return num
+    .toString()
+    .replace(/\d/g, (x) => persianDigits[parseInt(x, 10)]);
+}
+
+export function formatToman(amount: number): string {
+  if (amount === 0) return "رایگان";
+  const formatted = amount.toLocaleString("en-US");
+  return `${toPersianDigits(formatted)} تومان`;
+}
+
+export function getLevelBadge(level: string): { label: string; color: string } {
+  switch (level) {
+    case "BEGINNER":
+      return { label: "مقدماتی", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+    case "INTERMEDIATE":
+      return { label: "متوسط", color: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+    case "ADVANCED":
+      return { label: "پیشرفته", color: "bg-rose-500/15 text-rose-400 border-rose-500/30" };
+    default:
+      return { label: "مقدماتی تا پیشرفته", color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" };
+  }
+}
+
+export function generateSlug(text: string): string {
+  return text
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\u0600-\u06FF\-]+/g, "")
+    .replace(/\-\-+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+}
+
+src/lib/auth.ts
+
+import { NextAuthOptions, DefaultSession } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      role: string;
+    } & DefaultSession["user"];
+  }
+  interface User {
+    id: string;
+    role: string;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    role: string;
+  }
+}
+
+export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+  },
+  pages: {
+    signIn: "/auth/login",
+  },
+  providers: [
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "ایمیل", type: "email" },
+        password: { label: "رمز عبور", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("لطفاً ایمیل و رمز عبور را وارد کنید.");
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email.toLowerCase().trim() },
+        });
+
+        if (!user) {
+          throw new Error("کاربری با این ایمیل یافت نشد.");
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+        if (!isValid) {
+          throw new Error("رمز عبور اشتباه است.");
+        }
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+      }
+      return session;
+    },
+  },
+};
+
+src/app/api/auth/[...nextauth]/route.ts
+
+import NextAuth from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
+
+4. Persistent Cart & Wishlist State (src/store/useStore.ts)
+
+"use client";
+
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export interface CartCourseItem {
+  id: string;
+  title: string;
+  slug: string;
+  thumbnail: string;
+  instructorName: string;
+  price: number;
+  discountPrice: number | null;
+}
+
+interface AppliedCoupon {
+  code: string;
+  type: "PERCENTAGE" | "FIXED";
+  value: number;
+}
+
+interface StoreState {
+  cart: CartCourseItem[];
+  wishlist: CartCourseItem[];
+  isCartDrawerOpen: boolean;
+  coupon: AppliedCoupon | null;
+  setCartDrawerOpen: (open: boolean) => void;
+  addToCart: (item: CartCourseItem) => boolean;
+  removeFromCart: (id: string) => void;
+  clearCart: () => void;
+  toggleWishlist: (item: CartCourseItem) => boolean; // true = added, false = removed
+  applyCouponState: (coupon: AppliedCoupon | null) => void;
+  getCartTotals: () => {
+    subtotal: number;
+    courseDiscount: number;
+    couponDiscount: number;
+    finalTotal: number;
+  };
+}
+
+export const useStore = create<StoreState>()(
+  persist(
+    (set, get) => ({
+      cart: [],
+      wishlist: [],
+      isCartDrawerOpen: false,
+      coupon: null,
+
+      setCartDrawerOpen: (open) => set({ isCartDrawerOpen: open }),
+
+      addToCart: (item) => {
+        const exists = get().cart.some((c) => c.id === item.id);
+        if (exists) return false;
+        set((state) => ({ cart: [...state.cart, item] }));
+        return true;
+      },
+
+      removeFromCart: (id) =>
+        set((state) => ({
+          cart: state.cart.filter((item) => item.id !== id),
+        })),
+
+      clearCart: () => set({ cart: [], coupon: null }),
+
+      toggleWishlist: (item) => {
+        const exists = get().wishlist.some((c) => c.id === item.id);
+        if (exists) {
+          set((state) => ({
+            wishlist: state.wishlist.filter((c) => c.id !== item.id),
+          }));
+          return false;
+        } else {
+          set((state) => ({ wishlist: [...state.wishlist, item] }));
+          return true;
+        }
+      },
+
+      applyCouponState: (coupon) => set({ coupon }),
+
+      getCartTotals: () => {
+        const { cart, coupon } = get();
+        const subtotal = cart.reduce((acc, item) => acc + item.price, 0);
+        const afterCourseDiscount = cart.reduce(
+          (acc, item) =>
+            acc + (item.discountPrice !== null ? item.discountPrice : item.price),
+          0
+        );
+        const courseDiscount = subtotal - afterCourseDiscount;
+
+        let couponDiscount = 0;
+        if (coupon && afterCourseDiscount > 0) {
+          if (coupon.type === "PERCENTAGE") {
+            couponDiscount = Math.round((afterCourseDiscount * coupon.value) / 100);
+          } else {
+            couponDiscount = Math.min(afterCourseDiscount, coupon.value);
+          }
+        }
+
+        const finalTotal = Math.max(0, afterCourseDiscount - couponDiscount);
+        return {
+          subtotal,
+          courseDiscount,
+          couponDiscount,
+          finalTotal,
+        };
+      },
+    }),
+    {
+      name: "codeacademy-storage",
+      partialize: (state) => ({
+        cart: state.cart,
+        wishlist: state.wishlist,
+        coupon: state.coupon,
+      }),
+    }
+  )
+);
+
+5. Complete Server Actions (src/actions/)
+
+src/actions/course.actions.ts
+
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { generateSlug } from "@/lib/utils";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("عدم دسترسی: فقط مدیر سیستم مجاز به انجام این عملیات است.");
+  }
+  return session.user;
+}
+
+export async function searchCoursesLive(query: string) {
+  if (!query || query.trim().length < 2) return [];
+  return prisma.course.findMany({
+    where: {
+      isPublished: true,
+      OR: [
+        { title: { contains: query.trim() } },
+        { shortDesc: { contains: query.trim() } },
+        { instructorName: { contains: query.trim() } },
+      ],
+    },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      thumbnail: true,
+      price: true,
+      discountPrice: true,
+      instructorName: true,
+      category: { select: { name: true } },
+    },
+    take: 6,
+  });
+}
+
+export interface ChapterInput {
+  title: string;
+  position: number;
+  lessons: {
+    title: string;
+    duration: string;
+    videoUrl: string;
+    isFree: boolean;
+    position: number;
+  }[];
+}
+
+export interface UpsertCourseInput {
+  id?: string;
+  title: string;
+  slug?: string;
+  shortDesc: string;
+  description: string;
+  thumbnail: string;
+  previewVideoUrl: string;
+  price: number;
+  discountPrice: number | null;
+  level: string;
+  duration: string;
+  prerequisites: string;
+  instructorName: string;
+  instructorTitle: string;
+  categoryId: string;
+  isPublished: boolean;
+  isFeatured: boolean;
+  chapters: ChapterInput[];
+}
+
+export async function saveCourseWithCurriculum(data: UpsertCourseInput) {
+  await requireAdmin();
+
+  const cleanSlug = data.slug?.trim()
+    ? generateSlug(data.slug)
+    : generateSlug(data.title);
+
+  if (data.id) {
+    // Update existing course & rebuild chapters/lessons atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.chapter.deleteMany({ where: { courseId: data.id } });
+
+      await tx.course.update({
+        where: { id: data.id },
+        data: {
+          title: data.title,
+          slug: cleanSlug,
+          shortDesc: data.shortDesc,
+          description: data.description,
+          thumbnail: data.thumbnail,
+          previewVideoUrl: data.previewVideoUrl,
+          price: Number(data.price),
+          discountPrice:
+            data.discountPrice !== null && data.discountPrice >= 0
+              ? Number(data.discountPrice)
+              : null,
+          level: data.level,
+          duration: data.duration,
+          prerequisites: data.prerequisites,
+          instructorName: data.instructorName,
+          instructorTitle: data.instructorTitle,
+          categoryId: data.categoryId,
+          isPublished: data.isPublished,
+          isFeatured: data.isFeatured,
+          chapters: {
+            create: data.chapters.map((ch, cIdx) => ({
+              title: ch.title,
+              position: cIdx + 1,
+              lessons: {
+                create: ch.lessons.map((les, lIdx) => ({
+                  title: les.title,
+                  duration: les.duration || "۱۵:۰۰",
+                  videoUrl: les.videoUrl,
+                  isFree: les.isFree,
+                  position: lIdx + 1,
+                })),
+              },
+            })),
+          },
+        },
+      });
+    });
+  } else {
+    await prisma.course.create({
+      data: {
+        title: data.title,
+        slug: `${cleanSlug}-${Math.floor(100 + Math.random() * 900)}`,
+        shortDesc: data.shortDesc,
+        description: data.description,
+        thumbnail: data.thumbnail,
+        previewVideoUrl: data.previewVideoUrl,
+        price: Number(data.price),
+        discountPrice:
+          data.discountPrice !== null && data.discountPrice >= 0
+            ? Number(data.discountPrice)
+            : null,
+        level: data.level,
+        duration: data.duration,
+        prerequisites: data.prerequisites,
+        instructorName: data.instructorName,
+        instructorTitle: data.instructorTitle,
+        categoryId: data.categoryId,
+        isPublished: data.isPublished,
+        isFeatured: data.isFeatured,
+        chapters: {
+          create: data.chapters.map((ch, cIdx) => ({
+            title: ch.title,
+            position: cIdx + 1,
+            lessons: {
+              create: ch.lessons.map((les, lIdx) => ({
+                title: les.title,
+                duration: les.duration || "۱۵:۰۰",
+                videoUrl: les.videoUrl,
+                isFree: les.isFree,
+                position: lIdx + 1,
+              })),
+            },
+          })),
+        },
+      },
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath("/admin/courses");
+  return { success: true };
+}
+
+export async function duplicateCourseAction(courseId: string) {
+  await requireAdmin();
+
+  const existing = await prisma.course.findUnique({
+    where: { id: courseId },
+    include: { chapters: { include: { lessons: true } } },
+  });
+
+  if (!existing) throw new Error("دوره مورد نظر یافت نشد.");
+
+  await prisma.course.create({
+    data: {
+      title: `${existing.title} (کپی)`,
+      slug: `${existing.slug}-copy-${Date.now().toString().slice(-4)}`,
+      shortDesc: existing.shortDesc,
+      description: existing.description,
+      thumbnail: existing.thumbnail,
+      previewVideoUrl: existing.previewVideoUrl,
+      price: existing.price,
+      discountPrice: existing.discountPrice,
+      level: existing.level,
+      duration: existing.duration,
+      prerequisites: existing.prerequisites,
+      instructorName: existing.instructorName,
+      instructorTitle: existing.instructorTitle,
+      categoryId: existing.categoryId,
+      isPublished: false,
+      isFeatured: false,
+      chapters: {
+        create: existing.chapters.map((ch) => ({
+          title: ch.title,
+          position: ch.position,
+          lessons: {
+            create: ch.lessons.map((l) => ({
+              title: l.title,
+              duration: l.duration,
+              videoUrl: l.videoUrl,
+              isFree: l.isFree,
+              position: l.position,
+            })),
+          },
+        })),
+      },
+    },
+  });
+
+  revalidatePath("/admin/courses");
+  revalidatePath("/courses");
+  return { success: true };
+}
+
+export async function deleteCourseAction(courseId: string) {
+  await requireAdmin();
+  await prisma.course.delete({ where: { id: courseId } });
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath("/admin/courses");
+  return { success: true };
+}
+
+export async function submitReviewAction(
+  courseId: string,
+  rating: number,
+  comment: string
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    throw new Error("برای ثبت دیدگاه ابتدا وارد حساب کاربری خود شوید.");
+  }
+
+  if (!comment.trim()) {
+    throw new Error("متن دیدگاه نمی‌تواند خالی باشد.");
+  }
+
+  await prisma.review.create({
+    data: {
+      courseId,
+      userId: session.user.id,
+      rating: Math.min(5, Math.max(1, rating)),
+      comment: comment.trim(),
+    },
+  });
+
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { slug: true },
+  });
+
+  if (course) {
+    revalidatePath(`/courses/${course.slug}`);
+  }
+  return { success: true };
+}
+
+src/actions/admin.actions.ts
+
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
+import { generateSlug } from "@/lib/utils";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("دسترسی غیرمجاز: نیازمند سطح دسترسی مدیریت.");
+  }
+}
+
+// --- AUTH REGISTER & PROFILE ---
+export async function registerUserAction(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}) {
+  const email = data.email.toLowerCase().trim();
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) {
+    throw new Error("این ایمیل قبلاً ثبت شده است.");
+  }
+
+  const passwordHash = await bcrypt.hash(data.password, 10);
+  await prisma.user.create({
+    data: {
+      name: data.name.trim(),
+      email,
+      passwordHash,
+      phone: data.phone || null,
+      role: "STUDENT",
+    },
+  });
+
+  return { success: true };
+}
+
+export async function updateProfileAction(data: {
+  name: string;
+  phone: string;
+  bio: string;
+}) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("ابتدا وارد شوید.");
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: {
+      name: data.name.trim(),
+      phone: data.phone.trim(),
+      bio: data.bio.trim(),
+    },
+  });
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+// --- CATEGORIES CRUD ---
+export async function saveCategoryAction(data: {
+  id?: string;
+  name: string;
+  slug: string;
+  icon: string;
+  description: string;
+}) {
+  await requireAdmin();
+  const cleanSlug = generateSlug(data.slug || data.name);
+
+  if (data.id) {
+    await prisma.category.update({
+      where: { id: data.id },
+      data: {
+        name: data.name,
+        slug: cleanSlug,
+        icon: data.icon || "Code2",
+        description: data.description,
+      },
+    });
+  } else {
+    await prisma.category.create({
+      data: {
+        name: data.name,
+        slug: cleanSlug,
+        icon: data.icon || "Code2",
+        description: data.description,
+      },
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath("/admin/categories");
+  return { success: true };
+}
+
+export async function deleteCategoryAction(id: string) {
+  await requireAdmin();
+  await prisma.category.delete({ where: { id } });
+  revalidatePath("/");
+  revalidatePath("/courses");
+  revalidatePath("/admin/categories");
+  return { success: true };
+}
+
+// --- DISCOUNT CODES CRUD ---
+export async function createDiscountCodeAction(data: {
+  code: string;
+  type: "PERCENTAGE" | "FIXED";
+  value: number;
+  maxUses: number;
+  expiresAt?: string;
+}) {
+  await requireAdmin();
+  const cleanCode = data.code.trim().toUpperCase();
+
+  await prisma.discountCode.create({
+    data: {
+      code: cleanCode,
+      type: data.type,
+      value: Number(data.value),
+      maxUses: Number(data.maxUses),
+      expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+      isActive: true,
+    },
+  });
+
+  revalidatePath("/admin/coupons");
+  return { success: true };
+}
+
+export async function toggleDiscountStatusAction(id: string, isActive: boolean) {
+  await requireAdmin();
+  await prisma.discountCode.update({
+    where: { id },
+    data: { isActive },
+  });
+  revalidatePath("/admin/coupons");
+  return { success: true };
+}
+
+export async function deleteDiscountCodeAction(id: string) {
+  await requireAdmin();
+  await prisma.discountCode.delete({ where: { id } });
+  revalidatePath("/admin/coupons");
+  return { success: true };
+}
+
+// --- USERS & MANUAL COURSE ACCESS ---
+export async function updateUserRoleAction(userId: string, role: "ADMIN" | "STUDENT") {
+  await requireAdmin();
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role },
+  });
+  revalidatePath("/admin/users");
+  return { success: true };
+}
+
+export async function grantManualCourseAccessAction(userId: string, courseId: string) {
+  await requireAdmin();
+
+  const existing = await prisma.enrollment.findUnique({
+    where: {
+      userId_courseId: { userId, courseId },
+    },
+  });
+
+  if (existing) {
+    throw new Error("این دانشجو قبلاً در این دوره ثبت‌نام شده است.");
+  }
+
+  await prisma.$transaction([
+    prisma.enrollment.create({
+      data: { userId, courseId },
+    }),
+    prisma.course.update({
+      where: { id: courseId },
+      data: { studentsCount: { increment: 1 } },
+    }),
+  ]);
+
+  revalidatePath("/admin/users");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+src/actions/checkout.actions.ts
+
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+
+export async function validateCouponAction(code: string) {
+  const cleanCode = code.trim().toUpperCase();
+  if (!cleanCode) throw new Error("لطفاً کد تخفیف را وارد کنید.");
+
+  const discount = await prisma.discountCode.findUnique({
+    where: { code: cleanCode },
+  });
+
+  if (!discount || !discount.isActive) {
+    throw new Error("کد تخفیف وارد شده معتبر نیست یا غیرفعال شده است.");
+  }
+
+  if (discount.usedCount >= discount.maxUses) {
+    throw new Error("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.");
+  }
+
+  if (discount.expiresAt && new Date(discount.expiresAt) < new Date()) {
+    throw new Error("مهلت استفاده از این کد تخفیف منقضی شده است.");
+  }
+
+  return {
+    code: discount.code,
+    type: discount.type as "PERCENTAGE" | "FIXED",
+    value: discount.value,
+  };
+}
+
+export async function initiateCheckoutAction(
+  courseIds: string[],
+  couponCode?: string | null
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    throw new Error("برای تکمیل خرید ابتدا وارد حساب کاربری خود شوید.");
+  }
+
+  if (!courseIds.length) {
+    throw new Error("سبد خرید شما خالی است.");
+  }
+
+  const courses = await prisma.course.findMany({
+    where: { id: { in: courseIds } },
+  });
+
+  if (!courses.length) {
+    throw new Error("دوره‌های انتخاب شده یافت نشدند.");
+  }
+
+  const subtotal = courses.reduce((sum, c) => sum + c.price, 0);
+  const afterCourseDiscounts = courses.reduce(
+    (sum, c) => sum + (c.discountPrice !== null ? c.discountPrice : c.price),
+    0
+  );
+
+  let couponDiscount = 0;
+  let validCouponCode: string | null = null;
+
+  if (couponCode) {
+    const discount = await prisma.discountCode.findUnique({
+      where: { code: couponCode.toUpperCase() },
+    });
+    if (
+      discount &&
+      discount.isActive &&
+      discount.usedCount < discount.maxUses &&
+      (!discount.expiresAt || new Date(discount.expiresAt) > new Date())
+    ) {
+      validCouponCode = discount.code;
+      if (discount.type === "PERCENTAGE") {
+        couponDiscount = Math.round((afterCourseDiscounts * discount.value) / 100);
+      } else {
+        couponDiscount = Math.min(afterCourseDiscounts, discount.value);
+      }
+    }
+  }
+
+  const finalAmount = Math.max(0, afterCourseDiscounts - couponDiscount);
+  const totalDiscount = subtotal - finalAmount;
+  const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+  const order = await prisma.order.create({
+    data: {
+      orderNumber,
+      userId: session.user.id,
+      totalAmount: subtotal,
+      discountAmount: totalDiscount,
+      finalAmount,
+      couponCode: validCouponCode,
+      status: "PENDING",
+      items: {
+        create: courses.map((c) => ({
+          courseId: c.id,
+          price: c.discountPrice !== null ? c.discountPrice : c.price,
+        })),
+      },
+    },
+  });
+
+  return { orderId: order.id, finalAmount };
+}
+
+export async function verifySimulatedPaymentAction(
+  orderId: string,
+  status: "SUCCESS" | "FAILED"
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("احراز هویت نامعتبر.");
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
+
+  if (!order) throw new Error("سفارش یافت نشد.");
+  if (order.status === "COMPLETED") return { success: true };
+
+  if (status === "FAILED") {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status: "FAILED" },
+    });
+    return { success: false };
+  }
+
+  const paymentRef = `ZP-${Math.floor(10000000 + Math.random() * 90000000)}`;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: "COMPLETED",
+        paymentRef,
+      },
+    });
+
+    if (order.couponCode) {
+      await tx.discountCode.updateMany({
+        where: { code: order.couponCode },
+        data: { usedCount: { increment: 1 } },
+      });
+    }
+
+    for (const item of order.items) {
+      const exists = await tx.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: order.userId,
+            courseId: item.courseId,
+          },
+        },
+      });
+
+      if (!exists) {
+        await tx.enrollment.create({
+          data: {
+            userId: order.userId,
+            courseId: item.courseId,
+          },
+        });
+        await tx.course.update({
+          where: { id: item.courseId },
+          data: { studentsCount: { increment: 1 } },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  revalidatePath("/admin/orders");
+  return { success: true, paymentRef };
+}
+
+6. Layout, Providers, Glassmorphism Header, Mega-Menu & Slide-Over Cart (src/components/)
+
+src/components/Providers.tsx
+
+"use client";
+
+import { SessionProvider } from "next-auth/react";
+import { Toaster } from "sonner";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      {children}
+      <Toaster
+        position="top-center"
+        dir="rtl"
+        richColors
+        toastOptions={{
+          style: {
+            fontFamily: "var(--font-vazirmatn), sans-serif",
+          },
+        }}
+      />
+    </SessionProvider>
+  );
+}
+
+src/components/layout/Header.tsx
+
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
+import { useStore } from "@/store/useStore";
+import { searchCoursesLive } from "@/actions/course.actions";
+import { formatToman, toPersianDigits } from "@/lib/utils";
+import {
+  Code2,
+  Search,
+  ShoppingBag,
+  User,
+  ChevronDown,
+  ShieldAlert,
+  Layout,
+  Server,
+  BrainCircuit,
+  Smartphone,
+  CloudCog,
+  LogOut,
+  Heart,
+  Menu,
+  X,
+  Sparkles,
+} from "lucide-react";
+
+interface CategoryNav {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
+
+export function Header({ categories }: { categories: CategoryNav[] }) {
+  const { data: session } = useSession();
+  const { cart, wishlist, setCartDrawerOpen } = useStore();
+  const [mounted, setMounted] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchQuery.trim().length >= 2) {
+        setIsSearching(true);
+        try {
+          const res = await searchCoursesLive(searchQuery);
+          setSearchResults(res);
+          setShowDropdown(true);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+        setShowDropdown(false);
+      }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  return (
+    <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
+        {/* Right: Logo & Mega Menu */}
+        <div className="flex items-center gap-7">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 transition group-hover:scale-105">
+              <Code2 className="h-6 w-6" />
+            </div>
+            <div>
+              <span className="text-xl font-black tracking-tight text-white">
+                کد<span className="text-indigo-400">آکادمی</span>
+              </span>
+              <p className="text-[11px] text-slate-400">پلتفرم آموزش برنامه‌نویسی</p>
+            </div>
+          </Link>
+
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-300">
+            {/* Mega Menu Trigger */}
+            <div className="group relative py-2">
+              <button className="flex items-center gap-1.5 hover:text-white transition">
+                <span>دوره‌های تخصصی</span>
+                <ChevronDown className="h-4 w-4 text-slate-400 transition group-hover:rotate-180" />
+              </button>
+
+              {/* Mega Menu Dropdown */}
+              <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200 absolute right-0 top-full w-[580px] pt-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/95 p-5 shadow-2xl backdrop-blur-xl">
+                  <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <span className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      دپارتمان‌های آموزشی کدآکادمی
+                    </span>
+                    <Link
+                      href="/courses"
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      مشاهده همه دوره‌ها ←
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {categories.map((cat) => (
+                      <Link
+                        key={cat.id}
+                        href={`/courses?category=${cat.slug}`}
+                        className="flex items-start gap-3 rounded-xl p-3 hover:bg-slate-800/70 transition"
+                      >
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                          <Layout className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-100 text-sm">
+                            {cat.name}
+                          </div>
+                          <p className="line-clamp-1 text-xs text-slate-400 mt-0.5">
+                            {cat.description || "آموزش پروژه‌محور مقدماتی تا پیشرفته"}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Link href="/courses" className="hover:text-white transition">
+              کاتالوگ دوره‌ها
+            </Link>
+            <Link href="/#roadmaps" className="hover:text-white transition">
+              نقشه‌های راه
+            </Link>
+            {session?.user?.role === "ADMIN" && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition"
+              >
+                <ShieldAlert className="h-4 w-4" />
+                <span>پنل مدیریت</span>
+              </Link>
+            )}
+          </nav>
+        </div>
+
+        {/* Center: Live Autocomplete Search Bar */}
+        <div ref={searchRef} className="relative hidden md:block flex-1 max-w-md">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+              placeholder="جستجوی دوره، زبان برنامه‌نویسی یا مدرس..."
+              className="w-full rounded-xl border border-slate-800 bg-slate-900/90 py-2.5 pr-10 pl-4 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+            <Search className="absolute right-3.5 top-3 h-4 w-4 text-slate-400" />
+          </div>
+
+          {showDropdown && (
+            <div className="absolute right-0 left-0 top-full mt-2 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+              {isSearching ? (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  در حال جستجو...
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="divide-y divide-slate-800/60">
+                  {searchResults.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/courses/${item.slug}`}
+                      onClick={() => setShowDropdown(false)}
+                      className="flex items-center gap-3 p-3 hover:bg-slate-800/70 transition"
+                    >
+                      <img
+                        src={item.thumbnail}
+                        alt={item.title}
+                        className="h-12 w-16 rounded-lg object-cover shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-xs font-bold text-slate-100">
+                          {item.title}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {item.instructorName} • {item.category.name}
+                        </p>
+                      </div>
+                      <div className="text-xs font-bold text-emerald-400 shrink-0">
+                        {formatToman(item.discountPrice ?? item.price)}
+                      </div>
+                    </Link>
+                  ))}
+                  <Link
+                    href={`/courses?q=${encodeURIComponent(searchQuery)}`}
+                    onClick={() => setShowDropdown(false)}
+                    className="block bg-slate-950/60 py-2.5 text-center text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+                  >
+                    مشاهده تمامی نتایج برای «{searchQuery}»
+                  </Link>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  دوره‌ای با این عبارت یافت نشد.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Left: Actions (Wishlist, Cart Drawer, User/Auth) */}
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard?tab=wishlist"
+            title="علاقه‌مندی‌ها"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:text-rose-400 transition"
+          >
+            <Heart className="h-5 w-5" />
+            {mounted && wishlist.length > 0 && (
+              <span className="absolute -top-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">
+                {toPersianDigits(wishlist.length)}
+              </span>
+            )}
+          </Link>
+
+          <button
+            onClick={() => setCartDrawerOpen(true)}
+            className="relative flex h-10 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3.5 text-slate-200 hover:border-indigo-500/50 hover:bg-slate-800 transition"
+          >
+            <ShoppingBag className="h-5 w-5 text-indigo-400" />
+            <span className="hidden sm:inline text-xs font-bold">سبد خرید</span>
+            {mounted && cart.length > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-slate-950">
+                {toPersianDigits(cart.length)}
+              </span>
+            )}
+          </button>
+
+          {session?.user ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition"
+              >
+                <User className="h-4 w-4" />
+                <span className="hidden sm:inline max-w-[110px] truncate">
+                  {session.user.name}
+                </span>
+              </Link>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                title="خروج از حساب"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-400 transition"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/auth/login"
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 hover:bg-indigo-500 transition"
+            >
+              <User className="h-4 w-4" />
+              <span>ورود / ثبت‌نام</span>
+            </Link>
+          )}
+
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex lg:hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-300"
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="border-t border-slate-800 bg-slate-950 px-4 py-4 lg:hidden space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {categories.map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/courses?category=${cat.slug}`}
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-xl border border-slate-800 bg-slate-900 p-2.5 text-xs font-semibold text-slate-200"
+              >
+                {cat.name}
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2 pt-2 border-t border-slate-800 text-sm">
+            <Link
+              href="/courses"
+              onClick={() => setMobileMenuOpen(false)}
+              className="py-1.5 text-slate-300"
+            >
+              همه دوره‌های آموزشی
+            </Link>
+            {session?.user?.role === "ADMIN" && (
+              <Link
+                href="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-1.5 font-bold text-emerald-400"
+              >
+                ورود به پنل مدیریت
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+src/components/layout/CartDrawer.tsx
+
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { useStore } from "@/store/useStore";
+import { formatToman, toPersianDigits } from "@/lib/utils";
+import { X, Trash2, ShoppingBag, ArrowLeft } from "lucide-react";
+
+export function CartDrawer() {
+  const {
+    cart,
+    isCartDrawerOpen,
+    setCartDrawerOpen,
+    removeFromCart,
+    getCartTotals,
+  } = useStore();
+
+  if (!isCartDrawerOpen) return null;
+
+  const { finalTotal } = getCartTotals();
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      <div
+        onClick={() => setCartDrawerOpen(false)}
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity"
+      />
+
+      <div className="fixed inset-y-0 left-0 flex max-w-full pr-10">
+        <div className="w-screen max-w-md border-r border-slate-800 bg-slate-900 shadow-2xl flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <ShoppingBag className="h-5 w-5 text-indigo-400" />
+              <h2 className="text-base font-bold text-white">
+                سبد خرید شما ({toPersianDigits(cart.length)} دوره)
+              </h2>
+            </div>
+            <button
+              onClick={() => setCartDrawerOpen(false)}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Items */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {cart.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800/70 text-slate-500">
+                  <ShoppingBag className="h-8 w-8" />
+                </div>
+                <p className="text-sm font-bold text-slate-300">
+                  سبد خرید شما خالی است
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  دوره‌های مورد نظر خود را برای شروع یادگیری اضافه کنید.
+                </p>
+                <Link
+                  href="/courses"
+                  onClick={() => setCartDrawerOpen(false)}
+                  className="mt-5 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"
+                >
+                  مشاهده دوره‌های آموزشی
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {cart.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3.5 rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
+                  >
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="h-16 w-20 rounded-xl object-cover shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/courses/${item.slug}`}
+                        onClick={() => setCartDrawerOpen(false)}
+                        className="line-clamp-1 text-xs font-bold text-slate-100 hover:text-indigo-400"
+                      >
+                        {item.title}
+                      </Link>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        {item.instructorName}
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className="text-xs font-bold text-emerald-400">
+                          {formatToman(item.discountPrice ?? item.price)}
+                        </span>
+                        {item.discountPrice !== null &&
+                          item.discountPrice < item.price && (
+                            <span className="text-[11px] text-slate-500 line-through">
+                              {formatToman(item.price)}
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      className="rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 transition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {cart.length > 0 && (
+            <div className="border-t border-slate-800 bg-slate-950 p-6 space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">مبلغ قابل پرداخت:</span>
+                <span className="text-lg font-black text-emerald-400">
+                  {formatToman(finalTotal)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Link
+                  href="/cart"
+                  onClick={() => setCartDrawerOpen(false)}
+                  className="flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 py-3 text-xs font-bold text-slate-200 hover:bg-slate-800"
+                >
+                  مشاهده سبد خرید
+                </Link>
+                <Link
+                  href="/checkout"
+                  onClick={() => setCartDrawerOpen(false)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white hover:bg-indigo-500"
+                >
+                  <span>تسویه حساب</span>
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+src/components/layout/Footer.tsx
+
+import React from "react";
+import Link from "next/link";
+import { Code2, ShieldCheck, Award, Headphones } from "lucide-react";
+
+export function Footer() {
+  return (
+    <footer className="border-t border-slate-800/80 bg-slate-950 text-slate-400">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
+          <div className="space-y-4">
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                <Code2 className="h-5 w-5" />
+              </div>
+              <span className="text-lg font-black text-white">
+                کد<span className="text-indigo-400">آکادمی</span>
+              </span>
+            </Link>
+            <p className="text-xs leading-relaxed text-slate-400">
+              کدآکادمی، مرجع تخصصی بوت‌کمپ‌ها و دوره‌های مهندسی نرم‌افزار، هوش مصنوعی، امنیت شبکه و کلود با منتورشیپ مستقیم متخصصین ارشد صنعت.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-white">مسیرهای یادگیری</h3>
+            <ul className="space-y-2 text-xs">
+              <li><Link href="/courses?category=frontend" className="hover:text-indigo-400">متخصص فرانت‌اند و Next.js</Link></li>
+              <li><Link href="/courses?category=backend" className="hover:text-indigo-400">معمار بک‌اند و میکروسرویس</Link></li>
+              <li><Link href="/courses?category=ai-data" className="hover:text-indigo-400">مهندسی هوش مصنوعی و LLM</Link></li>
+              <li><Link href="/courses?category=cybersecurity" className="hover:text-indigo-400">امنیت سایبری و تست نفوذ</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-white">دسترسی سریع</h3>
+            <ul className="space-y-2 text-xs">
+              <li><Link href="/courses" className="hover:text-indigo-400">کاتالوگ تمام دوره‌ها</Link></li>
+              <li><Link href="/dashboard" className="hover:text-indigo-400">پنل کاربری دانشجو</Link></li>
+              <li><Link href="/cart" className="hover:text-indigo-400">سبد خرید</Link></li>
+              <li><Link href="/auth/login" className="hover:text-indigo-400">ورود مدرسین و دانشجویان</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-white">نمادهای اعتماد و ضمانت</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-center">
+                <ShieldCheck className="h-7 w-7 text-emerald-400 mb-1" />
+                <span className="text-[11px] font-bold text-slate-200">اینماد پنج ستاره</span>
+                <span className="text-[10px] text-slate-500">پرداخت امن شاپرک</span>
+              </div>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-center">
+                <Award className="h-7 w-7 text-indigo-400 mb-1" />
+                <span className="text-[11px] font-bold text-slate-200">گواهینامه معتبر</span>
+                <span className="text-[10px] text-slate-500">قابل استعلام آنلاین</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
+          <p>© ۱۴۰۵ تمامی حقوق مادی و معنوی برای پلتفرم آموزشی کدآکادمی محفوظ است.</p>
+          <p className="mt-2 sm:mt-0">طراحی و معماری با Next.js 15، TypeScript و Prisma</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+src/components/course/CourseCard.tsx
+
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { useStore } from "@/store/useStore";
+import { formatToman, getLevelBadge, toPersianDigits } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  Clock,
+  Users,
+  Star,
+  ShoppingCart,
+  Heart,
+  UserCheck,
+} from "lucide-react";
+
+export interface CourseCardProps {
+  course: {
+    id: string;
+    title: string;
+    slug: string;
+    shortDesc: string;
+    thumbnail: string;
+    price: number;
+    discountPrice: number | null;
+    level: string;
+    duration: string;
+    instructorName: string;
+    studentsCount: number;
+    rating: number;
+    category?: { name: string };
+  };
+}
+
+export function CourseCard({ course }: CourseCardProps) {
+  const { addToCart, setCartDrawerOpen, toggleWishlist, wishlist } = useStore();
+  const isWishlisted = wishlist.some((w) => w.id === course.id);
+  const badge = getLevelBadge(course.level);
+
+  const handleAddToCart = () => {
+    const added = addToCart({
+      id: course.id,
+      title: course.title,
+      slug: course.slug,
+      thumbnail: course.thumbnail,
+      instructorName: course.instructorName,
+      price: course.price,
+      discountPrice: course.discountPrice,
+    });
+    if (added) {
+      toast.success("دوره به سبد خرید شما اضافه شد!");
+      setCartDrawerOpen(true);
+    } else {
+      toast.info("این دوره قبلاً به سبد خرید شما اضافه شده است.");
+      setCartDrawerOpen(true);
+    }
+  };
+
+  const handleWishlist = () => {
+    const added = toggleWishlist({
+      id: course.id,
+      title: course.title,
+      slug: course.slug,
+      thumbnail: course.thumbnail,
+      instructorName: course.instructorName,
+      price: course.price,
+      discountPrice: course.discountPrice,
+    });
+    if (added) toast.success("به لیست علاقه‌مندی‌ها اضافه شد.");
+    else toast.info("از لیست علاقه‌مندی‌ها حذف شد.");
+  };
+
+  const hasDiscount =
+    course.discountPrice !== null && course.discountPrice < course.price;
+  const discountPercent = hasDiscount
+    ? Math.round(((course.price - course.discountPrice!) / course.price) * 100)
+    : 0;
+
+  return (
+    <div className="group flex flex-col overflow-hidden rounded-2xl border border-slate-800/90 bg-slate-900/70 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-950/40">
+      {/* Thumbnail */}
+      <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
+        <Link href={`/courses/${course.slug}`}>
+          <img
+            src={course.thumbnail}
+            alt={course.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        </Link>
+
+        {/* Badges */}
+        <div className="absolute right-3 top-3 flex flex-wrap gap-1.5">
+          <span
+            className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold backdrop-blur-md ${badge.color}`}
+          >
+            {badge.label}
+          </span>
+          {hasDiscount && discountPercent > 0 && (
+            <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[11px] font-black text-slate-950 shadow">
+              {toPersianDigits(discountPercent)}٪ تخفیف
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={handleWishlist}
+          title="افزودن به علاقه‌مندی‌ها"
+          className={`absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-xl backdrop-blur-md transition ${
+            isWishlisted
+              ? "bg-rose-500 text-white"
+              : "bg-slate-950/70 text-slate-300 hover:text-rose-400"
+          }`}
+        >
+          <Heart className="h-4 w-4 fill-current" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 flex-col p-5">
+        {course.category && (
+          <span className="mb-1.5 text-[11px] font-semibold text-indigo-400">
+            {course.category.name}
+          </span>
+        )}
+
+        <Link
+          href={`/courses/${course.slug}`}
+          className="line-clamp-2 text-base font-bold leading-snug text-slate-100 group-hover:text-indigo-400 transition"
+        >
+          {course.title}
+        </Link>
+
+        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">
+          {course.shortDesc}
+        </p>
+
+        {/* Instructor & Rating */}
+        <div className="mt-4 flex items-center justify-between border-b border-slate-800/80 pb-3 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <UserCheck className="h-3.5 w-3.5 text-indigo-400" />
+            <span className="truncate max-w-[140px]">{course.instructorName}</span>
+          </div>
+          <div className="flex items-center gap-1 text-amber-400 font-bold">
+            <span>{toPersianDigits(course.rating.toFixed(1))}</span>
+            <Star className="h-3.5 w-3.5 fill-amber-400" />
+          </div>
+        </div>
+
+        {/* Meta Info */}
+        <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5 text-slate-500" />
+            <span>{course.duration}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Users className="h-3.5 w-3.5 text-slate-500" />
+            <span>{toPersianDigits(course.studentsCount)} دانشجو</span>
+          </div>
+        </div>
+
+        {/* Price & CTA */}
+        <div className="mt-auto pt-4 flex items-center justify-between">
+          <div>
+            {hasDiscount && (
+              <div className="text-xs text-slate-500 line-through">
+                {formatToman(course.price)}
+              </div>
+            )}
+            <div className="text-base font-black text-emerald-400">
+              {formatToman(course.discountPrice ?? course.price)}
+            </div>
+          </div>
+
+          <button
+            onClick={handleAddToCart}
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 transition"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            <span>ثبت‌نام دوره</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+7. Root Layout & Global Styles (src/app/layout.tsx & globals.css)
+
+src/app/globals.css
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0f172a;
+  color: #f8fafc;
+  font-family: var(--font-vazirmatn), system-ui, sans-serif;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4f46e5;
+}
+
+src/app/layout.tsx
+
+import type { Metadata } from "next";
+import { Vazirmatn } from "next/font/google";
+import "./globals.css";
+import { Providers } from "@/components/Providers";
+import { Header } from "@/components/layout/Header";
+import { CartDrawer } from "@/components/layout/CartDrawer";
+import { Footer } from "@/components/layout/Footer";
+import { prisma } from "@/lib/prisma";
+
+const vazirmatn = Vazirmatn({
+  subsets: ["arabic", "latin"],
+  variable: "--font-vazirmatn",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "کدآکادمی | پلتفرم جامع آموزش برنامه‌نویسی و بوت‌کمپ‌های تخصصی",
+  description:
+    "آموزش پروژه‌محور برنامه‌نویسی فرانت‌اند، بک‌اند، هوش مصنوعی، امنیت شبکه و دوآپس به زبان فارسی.",
+};
+
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const categories = await prisma.category.findMany({
+    select: { id: true, name: true, slug: true, description: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return (
+    <html lang="fa" dir="rtl" className={vazirmatn.variable}>
+      <body className="min-h-screen flex flex-col bg-[#0F172A] text-slate-100 antialiased selection:bg-indigo-500 selection:text-white">
+        <Providers>
+          <Header categories={categories} />
+          <CartDrawer />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </Providers>
+      </body>
+    </html>
+  );
+}
+
+8. Customer-Facing Pages (src/app/)
+
+8.1 Home Page (src/app/page.tsx)
+
+import React from "react";
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { CourseCard } from "@/components/course/CourseCard";
+import { toPersianDigits } from "@/lib/utils";
+import {
+  Sparkles,
+  Search,
+  ShieldCheck,
+  Headphones,
+  RefreshCw,
+  ArrowLeft,
+  Layers,
+  Terminal,
+  Cpu,
+  CheckCircle2,
+  Quote,
+} from "lucide-react";
+
+export default async function HomePage() {
+  const [featuredCourses, categories] = await Promise.all([
+    prisma.course.findMany({
+      where: { isPublished: true },
+      include: { category: { select: { name: true } } },
+      orderBy: [{ isFeatured: "desc" }, { studentsCount: "desc" }],
+      take: 6,
+    }),
+    prisma.category.findMany({
+      include: { _count: { select: { courses: true } } },
+    }),
+  ]);
+
+  const techPills = [
+    { label: "Next.js 15", href: "/courses?q=Next.js" },
+    { label: "Python & AI", href: "/courses?category=ai-data" },
+    { label: "Node.js & NestJS", href: "/courses?category=backend" },
+    { label: "هک و امنیت وب", href: "/courses?category=cybersecurity" },
+    { label: "Docker & K8s", href: "/courses?category=devops" },
+    { label: "الگوریتم (رایگان)", href: "/courses?price=free" },
+  ];
+
+  const roadmaps = [
+    {
+      title: "نقشه راه معمار فول‌استک وب",
+      steps: ["HTML/CSS & TypeScript", "React 19 & Next.js 15", "Node.js, Prisma & PostgreSQL", "Docker & CI/CD"],
+      duration: "۶ ماه تا استخدام",
+      slug: "frontend",
+      color: "from-indigo-600/20 to-slate-900",
+    },
+    {
+      title: "نقشه راه مهندس هوش مصنوعی و LLM",
+      steps: ["Python پیشرفته و ریاضیات دیتا", "Machine Learning & PyTorch", "Transformers & NLP", "LangChain, RAG & AI Agents"],
+      duration: "۷ ماه تا استخدام",
+      slug: "ai-data",
+      color: "from-emerald-600/20 to-slate-900",
+    },
+    {
+      title: "نقشه راه متخصص امنیت و باگ بانتی",
+      steps: ["شبکه، لینوکس و پروتکل HTTP", "آسیب‌پذیری‌های OWASP Top 10", "تست نفوذ پیشرفته و دور زدن WAF", "گزارش‌نویسی در HackerOne"],
+      duration: "۵ ماه تا کسب درآمد",
+      slug: "cybersecurity",
+      color: "from-amber-600/20 to-slate-900",
+    },
+  ];
+
+  return (
+    <div className="space-y-24 pb-20">
+      {/* 1. HERO SECTION */}
+      <section className="relative overflow-hidden border-b border-slate-800/80 pt-14 pb-20">
+        <div className="pointer-events-none absolute -top-40 right-1/4 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-1/4 h-80 w-80 rounded-full bg-emerald-500/10 blur-3xl" />
+
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold text-indigo-300 mb-6">
+            <Sparkles className="h-4 w-4 text-indigo-400" />
+            <span>ترم جدید بوت‌کمپ‌های تخصصی ۱۴۰۵ با کد تخفیف ۳۰٪: BAHAR30</span>
+          </div>
+
+          <h1 className="mx-auto max-w-4xl text-3xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
+            مهندسی نرم‌افزار را در مقیاس{" "}
+            <span className="bg-gradient-to-l from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
+              شرکت‌های تراز اول جهانی
+            </span>{" "}
+            تجربه کنید
+          </h1>
+
+          <p className="mx-auto mt-6 max-w-2xl text-sm sm:text-base leading-relaxed text-slate-400">
+            آموزش عمیق و ۱۰۰٪ پروژه‌محور برنامه‌نویسی، هوش مصنوعی، معماری بک‌اند و امنیت شبکه به همراه منتورشیپ مستقیم و بازبینی کد (Code Review).
+          </p>
+
+          {/* Hero Search Form */}
+          <form
+            action="/courses"
+            method="GET"
+            className="mx-auto mt-8 flex max-w-2xl items-center rounded-2xl border border-slate-700/80 bg-slate-900/90 p-2 shadow-2xl"
+          >
+            <Search className="mr-3 h-5 w-5 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              name="q"
+              placeholder="می‌خواهید چه تکنولوژی‌ای را یاد بگیرید؟ (مثلاً: Next.js، پایتون، امنیت...)"
+              className="w-full bg-transparent px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white hover:bg-indigo-500 transition"
+            >
+              جستجوی دوره
+            </button>
+          </form>
+
+          {/* Tech Stack Filter Pills */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs text-slate-500 ml-1">پرطرفدارترین‌ها:</span>
+            {techPills.map((pill) => (
+              <Link
+                key={pill.label}
+                href={pill.href}
+                className="rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:border-indigo-500/50 hover:text-indigo-400 transition"
+              >
+                {pill.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Trust Badges */}
+          <div className="mx-auto mt-14 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-slate-800/90 bg-slate-900/50 p-4 text-right">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">ضمانت بازگشت وجه</h3>
+                <p className="text-xs text-slate-400 mt-0.5">تا ۷ روز بدون قید و شرط</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3.5 rounded-2xl border border-slate-800/90 bg-slate-900/50 p-4 text-right">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
+                <Headphones className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">پشتیبانی اختصاصی منتور</h3>
+                <p className="text-xs text-slate-400 mt-0.5">پاسخگویی سریع به رفع اشکال کد</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3.5 rounded-2xl border border-slate-800/90 bg-slate-900/50 p-4 text-right">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
+                <RefreshCw className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">آپدیت مادام‌العمر رایگان</h3>
+                <p className="text-xs text-slate-400 mt-0.5">دسترسی دائمی به سرفصل‌های جدید</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. FEATURED & BEST-SELLING COURSES */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold text-indigo-400">منتخب دانشجویان</span>
+            <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+              دوره‌های ویژه و پرفروش کدآکادمی
+            </h2>
+          </div>
+          <Link
+            href="/courses"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300"
+          >
+            <span>مشاهده تمام دوره‌ها</span>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {featuredCourses.map((course) => (
+            <CourseCard key={course.id} course={course} />
+          ))}
+        </div>
+      </section>
+
+      {/* 3. CATEGORIES GRID */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <span className="text-xs font-bold text-emerald-400">تخصص خود را انتخاب کنید</span>
+          <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+            دپارتمان‌های تخصصی برنامه‌نویسی
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.map((cat) => (
+            <Link
+              key={cat.id}
+              href={`/courses?category=${cat.slug}`}
+              className="group flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition">
+                  <Terminal className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white group-hover:text-indigo-400 transition">
+                    {cat.name}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">
+                    {cat.description}
+                  </p>
+                </div>
+              </div>
+              <span className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300">
+                {toPersianDigits(cat._count.courses)} دوره
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. LEARNING ROADMAPS */}
+      <section id="roadmaps" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <span className="text-xs font-bold text-indigo-400">مسیر استاندارد یادگیری</span>
+          <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+            نقشه راه ورود به بازار کار (صفر تا استخدام)
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {roadmaps.map((rm) => (
+            <div
+              key={rm.title}
+              className={`rounded-2xl border border-slate-800 bg-gradient-to-b ${rm.color} p-6 flex flex-col justify-between`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="rounded-lg bg-slate-950/70 px-3 py-1 text-xs font-bold text-emerald-400 border border-slate-800">
+                    {rm.duration}
+                  </span>
+                  <Cpu className="h-5 w-5 text-slate-400" />
+                </div>
+                <h3 className="mt-4 text-lg font-black text-white">{rm.title}</h3>
+                <ul className="mt-5 space-y-3">
+                  {rm.steps.map((step, i) => (
+                    <li key={step} className="flex items-center gap-2.5 text-xs text-slate-300">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600/20 text-[11px] font-bold text-indigo-400 border border-indigo-500/30">
+                        {toPersianDigits(i + 1)}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <Link
+                href={`/courses?category=${rm.slug}`}
+                className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 py-3 text-xs font-bold text-white hover:border-indigo-500 hover:bg-indigo-600 transition"
+              >
+                <span>مشاهده دوره‌های این مسیر</span>
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. STUDENT TESTIMONIALS */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <span className="text-xs font-bold text-indigo-400">تجربه دانشجویان</span>
+          <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+            فارغ‌التحصیلان کدآکادمی چه می‌گویند؟
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {[
+            {
+              name: "محمدرضا کریمی",
+              role: "توسعه‌دهنده فرانت‌اند در دیجی‌کالا",
+              text: "بوت‌کمپ Next.js 15 دکتر نادری به معنای واقعی کلمه سطح کدنویسی من رو به استانداردهای اینترپرایز رسوند. ۳ هفته بعد از اتمام پروژه دوره استخدام شدم.",
+            },
+            {
+              name: "مهسا شجاعی",
+              role: "مهندس هوش مصنوعی",
+              text: "برخلاف دوره‌های تئوری دانشگاهی، در دوره هوش مصنوعی کدآکادمی کار با مدل‌های LLM و پیاده‌سازی RAG روی داده‌های فارسی رو کاملاً عملی یاد گرفتم.",
+            },
+            {
+              name: "علی نیک‌پی",
+              role: "متخصص تست نفوذ و شکارچی باگ",
+              text: "اولین بانتی ۵۰۰ دلاری خودم رو دقیقا با تکنیک‌های فصل دوم دوره تست نفوذ وب مهندس کاظمی به دست آوردم. پشتیبانی دوره بی‌نظیر بود.",
+            },
+          ].map((item) => (
+            <div
+              key={item.name}
+              className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 relative"
+            >
+              <Quote className="h-8 w-8 text-indigo-500/20 absolute left-5 top-5" />
+              <p className="text-xs leading-relaxed text-slate-300">{item.text}</p>
+              <div className="mt-5 flex items-center gap-3 border-t border-slate-800/80 pt-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600/20 font-bold text-indigo-400 text-sm">
+                  {item.name[0]}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white">{item.name}</div>
+                  <div className="text-[11px] text-emerald-400">{item.role}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+8.2 Courses Catalog with URL-Synced Sidebar Filters (src/app/courses/page.tsx & src/components/course/CourseFilters.tsx)
+
+src/components/course/CourseFilters.tsx
+
+"use client";
+
+import React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Filter, RotateCcw } from "lucide-react";
+
+interface Props {
+  categories: { id: string; name: string; slug: string }[];
+}
+
+export function CourseFilters({ categories }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const currentCategory = searchParams.get("category") || "";
+  const currentLevel = searchParams.get("level") || "";
+  const currentPrice = searchParams.get("price") || "";
+  const currentSort = searchParams.get("sort") || "newest";
+  const currentQuery = searchParams.get("q") || "";
+
+  const updateFilter = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    router.push(`/courses?${params.toString()}`);
+  };
+
+  const resetAll = () => {
+    router.push("/courses");
+  };
+
+  return (
+    <div className="space-y-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-2 text-sm font-bold text-white">
+          <Filter className="h-4 w-4 text-indigo-400" />
+          <span>فیلترهای پیشرفته</span>
+        </div>
+        <button
+          onClick={resetAll}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-rose-400 transition"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          <span>حذف فیلترها</span>
+        </button>
+      </div>
+
+      {/* Search Input */}
+      <div>
+        <label className="block text-xs font-bold text-slate-300 mb-2">
+          جستجو در عنوان دوره
+        </label>
+        <input
+          type="text"
+          defaultValue={currentQuery}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              updateFilter("q", (e.target as HTMLInputElement).value);
+            }
+          }}
+          placeholder="نام دوره + Enter..."
+          className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
+
+      {/* Sort By */}
+      <div>
+        <label className="block text-xs font-bold text-slate-300 mb-2">
+          مرتب‌سازی بر اساس
+        </label>
+        <select
+          value={currentSort}
+          onChange={(e) => updateFilter("sort", e.target.value)}
+          className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+        >
+          <option value="newest">جدیدترین دوره‌ها</option>
+          <option value="popular">پرفروش‌ترین و محبوب‌ترین</option>
+          <option value="cheapest">ارزان‌ترین قیمت</option>
+        </select>
+      </div>
+
+      {/* Category Filter */}
+      <div>
+        <label className="block text-xs font-bold text-slate-300 mb-2">
+          دپارتمان تخصصی
+        </label>
+        <div className="space-y-1.5">
+          <button
+            onClick={() => updateFilter("category", "")}
+            className={`w-full text-right rounded-xl px-3 py-2 text-xs transition ${
+              currentCategory === ""
+                ? "bg-indigo-600 text-white font-bold"
+                : "text-slate-400 hover:bg-slate-800"
+            }`}
+          >
+            همه دسته‌بندی‌ها
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => updateFilter("category", cat.slug)}
+              className={`w-full text-right rounded-xl px-3 py-2 text-xs transition ${
+                currentCategory === cat.slug
+                  ? "bg-indigo-600 text-white font-bold"
+                  : "text-slate-400 hover:bg-slate-800"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Skill Level Filter */}
+      <div>
+        <label className="block text-xs font-bold text-slate-300 mb-2">
+          سطح مهارت دوره
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { value: "", label: "همه سطوح" },
+            { value: "BEGINNER", label: "مقدماتی" },
+            { value: "INTERMEDIATE", label: "متوسط" },
+            { value: "ADVANCED", label: "پیشرفته" },
+            { value: "ALL_LEVELS", label: "جامع (صفر تا صد)" },
+          ].map((lvl) => (
+            <button
+              key={lvl.value}
+              onClick={() => updateFilter("level", lvl.value)}
+              className={`rounded-xl border px-2.5 py-2 text-xs transition ${
+                currentLevel === lvl.value
+                  ? "border-indigo-500 bg-indigo-500/20 text-indigo-300 font-bold"
+                  : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"
+              }`}
+            >
+              {lvl.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Price Type */}
+      <div>
+        <label className="block text-xs font-bold text-slate-300 mb-2">
+          نوع سرمایه‌گذاری
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { value: "", label: "همه" },
+            { value: "free", label: "رایگان" },
+            { value: "paid", label: "نقدی / ویژه" },
+          ].map((pr) => (
+            <button
+              key={pr.value}
+              onClick={() => updateFilter("price", pr.value)}
+              className={`rounded-xl border px-2.5 py-2 text-xs transition ${
+                currentPrice === pr.value
+                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold"
+                  : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"
+              }`}
+            >
+              {pr.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+src/app/courses/page.tsx
+
+import React from "react";
+import { prisma } from "@/lib/prisma";
+import { CourseCard } from "@/components/course/CourseCard";
+import { CourseFilters } from "@/components/course/CourseFilters";
+import { toPersianDigits } from "@/lib/utils";
+import { Prisma } from "@prisma/client";
+
+export default async function CoursesCatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | undefined }>;
+}) {
+  const sp = await searchParams;
+  const categorySlug = sp.category || "";
+  const level = sp.level || "";
+  const priceType = sp.price || "";
+  const sort = sp.sort || "newest";
+  const q = sp.q || "";
+
+  const where: Prisma.CourseWhereInput = {
+    isPublished: true,
+  };
+
+  if (categorySlug) {
+    where.category = { slug: categorySlug };
+  }
+  if (level) {
+    where.level = level;
+  }
+  if (priceType === "free") {
+    where.price = 0;
+  } else if (priceType === "paid") {
+    where.price = { gt: 0 };
+  }
+  if (q) {
+    where.OR =
