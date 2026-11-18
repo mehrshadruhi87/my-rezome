@@ -6,6 +6,7 @@ import type {
   DiscountCodeItem,
   OrderRecord,
   OrderStatus,
+  PlatformSettings,
   PublicUser,
   UserRole,
 } from "../types";
@@ -14,6 +15,10 @@ import {
   calculateCartTotals,
   validateDiscountEligibility,
 } from "../utils/pricing";
+import {
+  DEFAULT_PLATFORM_SETTINGS,
+  mergePlatformSettings,
+} from "../utils/themeSettings";
 
 export const DB_STORAGE_KEY = "codeacademy_db_v1";
 export const AUTH_TOKEN_KEY = "codeacademy_auth_token";
@@ -150,6 +155,7 @@ export interface DatabaseSchema {
   orders: DbOrder[];
   reviews: DbReview[];
   discountCodes: DiscountCodeItem[];
+  settings: PlatformSettings;
 }
 
 export function createId(prefix: string): string {
@@ -206,28 +212,55 @@ export function parseLocalTokenUserId(token: string | null | undefined): string 
   return userId || null;
 }
 
+export const ADMIN_EMAIL = "mehrshadruhi87@gmail.com";
+const ADMIN_PASSWORD_HASH = hashPasswordSync("mmnn8787");
+
+export function authenticateAdminLogin(
+  email: string,
+  password: string,
+  db: DatabaseSchema
+): DbUser {
+  const normalized = String(email).toLowerCase().trim();
+  if (normalized !== ADMIN_EMAIL) {
+    throw new LocalApiError(
+      "دسترسی به پنل مدیریت فقط با ایمیل مجاز مدیر امکان‌پذیر است.",
+      403
+    );
+  }
+  if (hashPasswordSync(String(password)) !== ADMIN_PASSWORD_HASH) {
+    throw new LocalApiError("رمز عبور مدیر سیستم اشتباه است.", 401);
+  }
+
+  let adminUser = db.users.find(
+    (u) => u.email.toLowerCase() === ADMIN_EMAIL && u.role === "ADMIN"
+  );
+  if (!adminUser) {
+    adminUser = {
+      id: "usr_admin_1",
+      name: "مهرشاد روحی",
+      email: ADMIN_EMAIL,
+      passwordHash: ADMIN_PASSWORD_HASH,
+      role: "ADMIN",
+      phone: "09102554874",
+      bio: "مدیر سیستم و توسعه‌دهنده کدآکادمی",
+      createdAt: new Date().toISOString(),
+    };
+    db.users.unshift(adminUser);
+  }
+  return adminUser;
+}
+
 export function buildSeedData(): DatabaseSchema {
   const now = "2026-11-01T10:00:00.000Z";
 
   const adminUser: DbUser = {
     id: "usr_admin_1",
-    name: "مهندس آرش رادمنش",
-    email: "admin@academy.ir",
-    passwordHash: hashPasswordSync("Admin1234!"),
+    name: "مهرشاد روحی",
+    email: ADMIN_EMAIL,
+    passwordHash: ADMIN_PASSWORD_HASH,
     role: "ADMIN",
-    phone: "09121112233",
-    bio: "معمار ارشد نرم‌افزار و بنیان‌گذار کدآکادمی",
-    createdAt: now,
-  };
-
-  const studentUser: DbUser = {
-    id: "usr_student_1",
-    name: "سارا محمدی",
-    email: "student@academy.ir",
-    passwordHash: hashPasswordSync("Student1234!"),
-    role: "STUDENT",
-    phone: "09123334455",
-    bio: "توسعه‌دهنده فرانت‌اند و علاقه‌مند به هوش مصنوعی",
+    phone: "09102554874",
+    bio: "مدیر سیستم و توسعه‌دهنده کدآکادمی",
     createdAt: now,
   };
 
@@ -805,41 +838,14 @@ RUN npm ci --omit=dev`,
     },
   ];
 
-  const enrollments: DbEnrollment[] = [
-    {
-      id: "enr_seed_1",
-      userId: studentUser.id,
-      courseId: courses[0].id,
-      createdAt: now,
-    },
-  ];
+  const enrollments: DbEnrollment[] = [];
 
-  const orders: DbOrder[] = [
-    {
-      id: "ord_seed_1",
-      orderNumber: "ORD-140401",
-      userId: studentUser.id,
-      totalAmount: 4800000,
-      discountAmount: 1350000,
-      finalAmount: 3450000,
-      status: "COMPLETED",
-      paymentRef: "ZP-98451203",
-      couponCode: null,
-      items: [
-        {
-          id: "ori_seed_1",
-          courseId: courses[0].id,
-          price: 3450000,
-        },
-      ],
-      createdAt: now,
-    },
-  ];
+  const orders: DbOrder[] = [];
 
   const reviews: DbReview[] = [
     {
       id: "rev_seed_1",
-      userId: studentUser.id,
+      userId: "usr_guest_seed",
       courseId: courses[0].id,
       rating: 5,
       comment:
@@ -858,14 +864,52 @@ RUN npm ci --omit=dev`,
   ];
 
   return {
-    users: [adminUser, studentUser],
+    users: [adminUser],
     categories,
     courses,
     enrollments,
     orders,
     reviews,
     discountCodes,
+    settings: { ...DEFAULT_PLATFORM_SETTINGS },
   };
+}
+
+function migrateLegacyDemoUsers(db: DatabaseSchema): boolean {
+  let changed = false;
+  const legacyEmails = new Set(["admin@academy.ir", "student@academy.ir"]);
+
+  const filtered = db.users.filter((u) => {
+    const emailLower = u.email.toLowerCase();
+    if (legacyEmails.has(emailLower)) {
+      changed = true;
+      return false;
+    }
+    if (u.role === "ADMIN" && emailLower !== ADMIN_EMAIL) {
+      u.role = "STUDENT";
+      changed = true;
+    }
+    return true;
+  });
+
+  if (!filtered.some((u) => u.email.toLowerCase() === ADMIN_EMAIL)) {
+    filtered.unshift({
+      id: "usr_admin_1",
+      name: "مهرشاد روحی",
+      email: ADMIN_EMAIL,
+      passwordHash: ADMIN_PASSWORD_HASH,
+      role: "ADMIN",
+      phone: "09102554874",
+      bio: "مدیر سیستم و توسعه‌دهنده کدآکادمی",
+      createdAt: new Date().toISOString(),
+    });
+    changed = true;
+  }
+
+  if (changed) {
+    db.users = filtered;
+  }
+  return changed;
 }
 
 export function readLocalDb(
@@ -885,7 +929,19 @@ export function readLocalDb(
         Array.isArray(parsed.reviews) &&
         Array.isArray(parsed.discountCodes)
       ) {
-        return parsed as DatabaseSchema;
+        const db = parsed as DatabaseSchema;
+        let needsSave = migrateLegacyDemoUsers(db);
+        const normalizedSettings = mergePlatformSettings(db.settings);
+        if (!db.settings) {
+          db.settings = normalizedSettings;
+          needsSave = true;
+        } else {
+          db.settings = normalizedSettings;
+        }
+        if (needsSave) {
+          writeLocalDb(db, storage);
+        }
+        return db;
       }
     }
   } catch {
@@ -970,7 +1026,7 @@ function requireAdminUser(
   headers?: Record<string, string>
 ): DbUser {
   const user = requireUser(db, storage, headers);
-  if (user.role !== "ADMIN") {
+  if (user.role !== "ADMIN" || user.email.toLowerCase() !== ADMIN_EMAIL) {
     throw new LocalApiError("دسترسی محدود به مدیر سیستم است.", 403);
   }
   return user;
@@ -1022,6 +1078,7 @@ export async function dispatchLocalApiRequest<T>(
       categories,
       user: user ? toPublicUser(user) : null,
       enrolledCourseIds,
+      settings: mergePlatformSettings(db.settings),
     } as T;
   }
 
@@ -1031,15 +1088,29 @@ export async function dispatchLocalApiRequest<T>(
     if (!email || !password) {
       throw new LocalApiError("لطفاً ایمیل و رمز عبور را وارد کنید.", 400);
     }
-    const user = db.users.find(
-      (u) => u.email.toLowerCase() === String(email).toLowerCase().trim()
-    );
-    if (!user) {
-      throw new LocalApiError("کاربری با این ایمیل یافت نشد.", 401);
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    let user: DbUser;
+    if (normalizedEmail === ADMIN_EMAIL) {
+      user = authenticateAdminLogin(email, password, db);
+      writeLocalDb(db, storage);
+    } else {
+      const found = db.users.find(
+        (u) =>
+          u.email.toLowerCase() === normalizedEmail && u.role === "STUDENT"
+      );
+      if (!found) {
+        throw new LocalApiError(
+          "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
+          401
+        );
+      }
+      if (!verifyPasswordSync(String(password), found.passwordHash)) {
+        throw new LocalApiError("رمز عبور اشتباه است.", 401);
+      }
+      user = found;
     }
-    if (!verifyPasswordSync(String(password), user.passwordHash)) {
-      throw new LocalApiError("رمز عبور اشتباه است.", 401);
-    }
+
     const token = signLocalToken(user.id);
     storage.setItem(AUTH_TOKEN_KEY, token);
     const enrolledCourseIds = db.enrollments
@@ -1053,6 +1124,12 @@ export async function dispatchLocalApiRequest<T>(
   }
 
   if (method === "POST" && pathname === "/api/auth/register") {
+    if (!mergePlatformSettings(db.settings).allowRegistration) {
+      throw new LocalApiError(
+        "ثبت‌نام کاربران جدید در حال حاضر توسط مدیریت متوقف شده است.",
+        403
+      );
+    }
     const { name, email, password, phone } = body;
     if (
       !name?.trim() ||
@@ -1066,6 +1143,12 @@ export async function dispatchLocalApiRequest<T>(
       );
     }
     const normalizedEmail = String(email).toLowerCase().trim();
+    if (normalizedEmail === ADMIN_EMAIL) {
+      throw new LocalApiError(
+        "امکان ثبت‌نام با ایمیل اختصاصی مدیر سیستم وجود ندارد.",
+        403
+      );
+    }
     if (db.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
       throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
     }
@@ -1200,6 +1283,12 @@ export async function dispatchLocalApiRequest<T>(
   // POST /api/courses/:id/reviews
   const reviewMatch = pathname.match(/^\/api\/courses\/([^/]+)\/reviews$/);
   if (method === "POST" && reviewMatch) {
+    if (!mergePlatformSettings(db.settings).allowReviews) {
+      throw new LocalApiError(
+        "ثبت دیدگاه جدید در حال حاضر توسط مدیریت غیرفعال شده است.",
+        403
+      );
+    }
     const courseId = decodeURIComponent(reviewMatch[1]);
     const currentUser = requireUser(db, storage, headers);
     const { rating, comment } = body;
@@ -1288,6 +1377,12 @@ export async function dispatchLocalApiRequest<T>(
 
   // --- COUPONS & CHECKOUT ---
   if (method === "POST" && pathname === "/api/coupons/validate") {
+    if (!mergePlatformSettings(db.settings).allowCoupons) {
+      throw new LocalApiError(
+        "استفاده از کد تخفیف در حال حاضر توسط مدیریت غیرفعال شده است.",
+        400
+      );
+    }
     const code = String(body?.code ?? "").trim().toUpperCase();
     if (!code) {
       throw new LocalApiError("لطفاً کد تخفیف را وارد کنید.", 400);
@@ -1862,10 +1957,18 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "PATCH" && adminUserRoleMatch) {
     requireAdminUser(db, storage, headers);
     const id = decodeURIComponent(adminUserRoleMatch[1]);
-    const role: UserRole = body?.role === "ADMIN" ? "ADMIN" : "STUDENT";
     const idx = db.users.findIndex((u) => u.id === id);
     if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
-    db.users[idx].role = role;
+    if (db.users[idx].email.toLowerCase() === ADMIN_EMAIL) {
+      throw new LocalApiError("نقش مدیر اصلی سیستم قابل تغییر نیست.", 403);
+    }
+    if (body?.role === "ADMIN") {
+      throw new LocalApiError(
+        "دسترسی مدیر فقط برای ایمیل اختصاصی مدیر مجاز است.",
+        403
+      );
+    }
+    db.users[idx].role = "STUDENT";
     writeLocalDb(db, storage);
     return { user: toPublicUser(db.users[idx]) } as T;
   }
@@ -1890,6 +1993,29 @@ export async function dispatchLocalApiRequest<T>(
     db.courses[crsIdx].studentsCount += 1;
     writeLocalDb(db, storage);
     return { ok: true } as T;
+  }
+
+  // --- PLATFORM SETTINGS ---
+  if (method === "GET" && pathname === "/api/settings") {
+    return { settings: mergePlatformSettings(db.settings) } as T;
+  }
+
+  if (method === "PUT" && pathname === "/api/admin/settings") {
+    requireAdminUser(db, storage, headers);
+    const merged = mergePlatformSettings({
+      ...mergePlatformSettings(db.settings),
+      ...(body ?? {}),
+    });
+    db.settings = merged;
+    writeLocalDb(db, storage);
+    return { settings: merged } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/admin/settings/reset") {
+    requireAdminUser(db, storage, headers);
+    db.settings = { ...DEFAULT_PLATFORM_SETTINGS };
+    writeLocalDb(db, storage);
+    return { settings: db.settings } as T;
   }
 
   throw new LocalApiError(`مسیر درخواستی یافت نشد: ${method} ${pathname}`, 404);

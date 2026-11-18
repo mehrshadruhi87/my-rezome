@@ -29,14 +29,22 @@ import {
   FolderTree,
   LayoutDashboard,
   Plus,
+  Settings,
   ShieldAlert,
   Tag,
   Trash2,
   Users,
   X,
 } from "lucide-react";
+import { AdminSettingsTab } from "../components/admin/AdminSettingsTab";
 
-type AdminTab = "overview" | "courses" | "categories" | "coupons" | "users";
+type AdminTab =
+  | "overview"
+  | "courses"
+  | "categories"
+  | "coupons"
+  | "users"
+  | "settings";
 
 interface AdminUserRow extends PublicUser {
   enrolledCourseIds: string[];
@@ -415,6 +423,7 @@ export function AdminPage() {
           { id: "categories" as const, label: "دسته‌بندی‌ها", icon: FolderTree },
           { id: "coupons" as const, label: "کدهای تخفیف", icon: Tag },
           { id: "users" as const, label: "کاربران و دسترسی‌ها", icon: Users },
+          { id: "settings" as const, label: "تنظیمات پلتفرم", icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -936,6 +945,9 @@ export function AdminPage() {
               </table>
             </div>
           )}
+
+          {/* 6. PLATFORM SETTINGS */}
+          {activeTab === "settings" && <AdminSettingsTab />}
         </>
       )}
 

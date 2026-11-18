@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Code2, KeyRound, Lock, Mail, Phone, User } from "lucide-react";
+import { Code2, Lock, Mail, Phone, User } from "lucide-react";
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const { login, register } = useAuth();
+  const { login, register, settings } = useAuth();
   const { push } = useRouter();
   const searchParams = useSearchParams();
   const redirectTarget = searchParams.get("redirect") || "/dashboard";
@@ -50,27 +50,6 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       const msg = err instanceof Error ? err.message : "خطا در احراز هویت";
       setErrorMsg(msg);
       toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const quickLogin = async (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setErrorMsg(null);
-    setSubmitting(true);
-    try {
-      const loggedUser = await login(demoEmail, demoPassword);
-      toast.success(`ورود با حساب ${loggedUser.name}`);
-      push(
-        loggedUser.role === "ADMIN" && redirectTarget === "/dashboard"
-          ? "/admin"
-          : redirectTarget
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "خطا در ورود";
-      setErrorMsg(msg);
     } finally {
       setSubmitting(false);
     }
@@ -135,6 +114,19 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           </div>
         )}
 
+        {mode === "register" && !settings.allowRegistration ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-center space-y-3">
+            <p className="text-xs font-semibold text-amber-200 leading-relaxed">
+              ثبت‌نام کاربران جدید در حال حاضر توسط مدیریت پلتفرم متوقف شده است.
+            </p>
+            <Link
+              href="/auth/login"
+              className="inline-block rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"
+            >
+              بازگشت به صفحه ورود
+            </Link>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "register" && (
             <>
@@ -238,32 +230,6 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               : "ایجاد حساب کاربری"}
           </button>
         </form>
-
-        {mode === "login" && (
-          <div className="border-t border-slate-800 pt-4 space-y-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-              <KeyRound className="h-3.5 w-3.5 text-indigo-400" />
-              <span>ورود سریع با حساب‌های نمونه:</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => quickLogin("student@academy.ir", "Student1234!")}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:border-indigo-500/60 hover:text-indigo-400 transition-colors"
-              >
-                ورود دانشجو (دمو)
-              </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => quickLogin("admin@academy.ir", "Admin1234!")}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-emerald-400 hover:border-emerald-500/60 transition-colors"
-              >
-                ورود مدیر سیستم (دمو)
-              </button>
-            </div>
-          </div>
         )}
       </div>
     </div>

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 export function Header() {
-  const { user, categories, logout } = useAuth();
+  const { user, categories, settings, logout } = useAuth();
   const { cart, wishlist, setCartDrawerOpen } = useStore();
   const { push } = useRouter();
 
@@ -88,7 +88,8 @@ export function Header() {
               <Code2 className="h-5 w-5" />
             </div>
             <span className="text-lg font-black tracking-tight text-white">
-              کد<span className="text-indigo-400">آکادمی</span>
+              {settings.brandPrimaryText}
+              <span className="text-indigo-400">{settings.brandAccentText}</span>
             </span>
           </Link>
 

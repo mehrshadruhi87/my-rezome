@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export function HomePage() {
-  const { categories } = useAuth();
+  const { categories, settings } = useAuth();
   const { push } = useRouter();
   const [featuredCourses, setFeaturedCourses] = useState<CourseSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,9 @@ export function HomePage() {
     let active = true;
     apiRequest<{ courses: CourseSummary[] }>("/api/courses?sort=newest")
       .then((res) => {
-        if (active) setFeaturedCourses(res.courses.slice(0, 9));
+        if (active) {
+          setFeaturedCourses(res.courses.slice(0, settings.featuredCoursesLimit));
+        }
       })
       .catch(() => {
         if (active) setFeaturedCourses([]);
@@ -38,7 +40,7 @@ export function HomePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [settings.featuredCoursesLimit]);
 
   const handleHeroSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,19 +99,18 @@ export function HomePage() {
       <section className="relative overflow-hidden border-b border-slate-800/80 pt-14 pb-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
           <p className="mb-4 text-xs font-semibold text-indigo-400">
-            ترم جدید بوت‌کمپ‌های تخصصی ۱۴۰۵ · کد تخفیف ۳۰ درصدی: BAHAR30
+            {settings.heroKicker}
           </p>
 
           <h1
             className="mx-auto max-w-4xl text-3xl font-black leading-tight text-white sm:text-5xl lg:text-6xl"
             style={{ textWrap: "balance" }}
           >
-            مهندسی نرم‌افزار را در مقیاس{" "}
-            <span className="text-indigo-400">شرکت‌های تراز اول</span> تجربه کنید
+            {settings.heroTitle}
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-sm sm:text-base leading-relaxed text-slate-400">
-            آموزش عمیق و ۱۰۰٪ پروژه‌محور برنامه‌نویسی، هوش مصنوعی، معماری بک‌اند و امنیت شبکه به همراه منتورشیپ مستقیم و بازبینی کد.
+            {settings.heroSubtitle}
           </p>
 
           <form
@@ -217,45 +218,48 @@ export function HomePage() {
       </section>
 
       {/* 3. CATEGORIES GRID */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 text-center">
-          <span className="text-xs font-bold text-emerald-400">
-            تخصص خود را انتخاب کنید
-          </span>
-          <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
-            دپارتمان‌های تخصصی برنامه‌نویسی
-          </h2>
-        </div>
+      {settings.showCategoriesSection && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-8 text-center">
+            <span className="text-xs font-bold text-emerald-400">
+              تخصص خود را انتخاب کنید
+            </span>
+            <h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">
+              دپارتمان‌های تخصصی برنامه‌نویسی
+            </h2>
+          </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {categories.map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/courses?category=${cat.slug}`}
-              className="group flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-colors"
-            >
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                  <Terminal className="h-5 w-5" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {categories.map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/courses?category=${cat.slug}`}
+                className="group flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-colors"
+              >
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    <Terminal className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-white group-hover:text-indigo-400 transition-colors truncate">
+                      {cat.name}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">
+                      {cat.description}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-white group-hover:text-indigo-400 transition-colors truncate">
-                    {cat.name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">
-                    {cat.description}
-                  </p>
-                </div>
-              </div>
-              <span className="shrink-0 text-xs font-bold text-slate-300 tabular-nums mr-3">
-                {toPersianDigits(cat.coursesCount ?? 0)} دوره
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
+                <span className="shrink-0 text-xs font-bold text-slate-300 tabular-nums mr-3">
+                  {toPersianDigits(cat.coursesCount ?? 0)} دوره
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 4. LEARNING ROADMAPS */}
+      {settings.showRoadmapsSection && (
       <section id="roadmaps" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <span className="text-xs font-bold text-indigo-400">
@@ -308,8 +312,10 @@ export function HomePage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* 5. STUDENT TESTIMONIALS */}
+      {settings.showTestimonialsSection && (
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
           <span className="text-xs font-bold text-indigo-400">تجربه دانشجویان</span>
@@ -357,6 +363,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+      )}
     </div>
   );
 }

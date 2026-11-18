@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ADMIN_EMAIL,
   AUTH_TOKEN_KEY,
   LocalApiError,
+  authenticateAdminLogin,
+  buildSeedData,
   createMemoryStorage,
   dispatchLocalApiRequest,
 } from "./localBackend";
@@ -28,37 +31,61 @@ test("seeds initial categories and courses into storage on bootstrap", async () 
   assert.equal(catalog.courses.length, 6);
 });
 
-test("supports demo student login, demo admin login, registration, and logout", async () => {
+test("requires public registration before login and enforces dedicated admin login", async () => {
   const storage = createMemoryStorage();
 
-  const studentRes = await dispatchLocalApiRequest<{
-    user: PublicUser;
-    enrolledCourseIds: string[];
-    token: string;
-  }>(
-    "/api/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        email: "student@academy.ir",
-        password: "Student1234!",
-      }),
-    },
-    storage
-  );
-  assert.equal(studentRes.user.role, "STUDENT");
-  assert.ok(studentRes.enrolledCourseIds.includes("crs_nextjs_15"));
-  assert.ok(storage.getItem(AUTH_TOKEN_KEY));
-
-  // Reject student from admin overview
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest("/api/admin/overview", {}, storage),
+  // Direct unit check on dedicated authenticateAdminLogin
+  const seedDb = buildSeedData();
+  assert.throws(
+    () => authenticateAdminLogin("other@example.com", "mmnn8787", seedDb),
     (err: unknown) => err instanceof LocalApiError && err.status === 403
   );
+  assert.throws(
+    () => authenticateAdminLogin(ADMIN_EMAIL, "wrongpass", seedDb),
+    (err: unknown) => err instanceof LocalApiError && err.status === 401
+  );
+  const authenticatedAdmin = authenticateAdminLogin(
+    ADMIN_EMAIL,
+    "mmnn8787",
+    seedDb
+  );
+  assert.equal(authenticatedAdmin.role, "ADMIN");
+  assert.equal(authenticatedAdmin.email, ADMIN_EMAIL);
 
-  await dispatchLocalApiRequest("/api/auth/logout", { method: "POST" }, storage);
-  assert.equal(storage.getItem(AUTH_TOKEN_KEY), null);
+  // Unregistered public user cannot log in directly
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email: "mohammad@test.ir",
+            password: "Password123!",
+          }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 401
+  );
+
+  // Public registration cannot claim the dedicated admin email
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/auth/register",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "جعلی",
+            email: ADMIN_EMAIL,
+            password: "Password123!",
+          }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 403
+  );
 
   // Register a fresh student
   const regRes = await dispatchLocalApiRequest<{
@@ -80,6 +107,35 @@ test("supports demo student login, demo admin login, registration, and logout", 
   assert.equal(regRes.user.role, "STUDENT");
   assert.equal(regRes.user.email, "mohammad@test.ir");
 
+  // Logout then sign back in with registered credentials
+  await dispatchLocalApiRequest("/api/auth/logout", { method: "POST" }, storage);
+  assert.equal(storage.getItem(AUTH_TOKEN_KEY), null);
+
+  const studentRes = await dispatchLocalApiRequest<{
+    user: PublicUser;
+    enrolledCourseIds: string[];
+    token: string;
+  }>(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: "mohammad@test.ir",
+        password: "Password123!",
+      }),
+    },
+    storage
+  );
+  assert.equal(studentRes.user.role, "STUDENT");
+  assert.equal(studentRes.user.email, "mohammad@test.ir");
+  assert.ok(storage.getItem(AUTH_TOKEN_KEY));
+
+  // Reject student from admin overview
+  await assert.rejects(
+    () => dispatchLocalApiRequest("/api/admin/overview", {}, storage),
+    (err: unknown) => err instanceof LocalApiError && err.status === 403
+  );
+
   // Re-bootstrap reads the persisted session
   const me = await dispatchLocalApiRequest<{ user: PublicUser | null }>(
     "/api/auth/me",
@@ -92,17 +148,36 @@ test("supports demo student login, demo admin login, registration, and logout", 
 test("admin course create, edit, duplicate, and delete immediately reflect in catalog", async () => {
   const storage = createMemoryStorage();
 
-  await dispatchLocalApiRequest(
+  // Wrong admin password rejected
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email: ADMIN_EMAIL,
+            password: "wrong-password",
+          }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 401
+  );
+
+  const adminLogin = await dispatchLocalApiRequest<{ user: PublicUser }>(
     "/api/auth/login",
     {
       method: "POST",
       body: JSON.stringify({
-        email: "admin@academy.ir",
-        password: "Admin1234!",
+        email: ADMIN_EMAIL,
+        password: "mmnn8787",
       }),
     },
     storage
   );
+  assert.equal(adminLogin.user.role, "ADMIN");
+  assert.equal(adminLogin.user.email, ADMIN_EMAIL);
 
   // Create
   const created = await dispatchLocalApiRequest<{ course: CourseSummary }>(
@@ -184,16 +259,17 @@ test("admin course create, edit, duplicate, and delete immediately reflect in ca
   assert.equal(finalCatalog.courses.length, 6);
 });
 
-test("coupon validation and checkout flow unlocks course for student", async () => {
+test("coupon validation and checkout flow unlocks course for registered student", async () => {
   const storage = createMemoryStorage();
 
   await dispatchLocalApiRequest(
-    "/api/auth/login",
+    "/api/auth/register",
     {
       method: "POST",
       body: JSON.stringify({
-        email: "student@academy.ir",
-        password: "Student1234!",
+        name: "سارا کریمی",
+        email: "sara@test.ir",
+        password: "Password123!",
       }),
     },
     storage
@@ -251,7 +327,121 @@ test("coupon validation and checkout flow unlocks course for student", async () 
     orders: Array<{ orderNumber: string; status: string }>;
   }>("/api/student/dashboard", {}, storage);
 
-  assert.equal(dashboard.enrolledCourses.length, 2);
-  assert.equal(dashboard.orders.length, 2);
+  assert.equal(dashboard.enrolledCourses.length, 1);
+  assert.equal(dashboard.orders.length, 1);
   assert.equal(dashboard.orders[0].status, "COMPLETED");
 });
+
+test("admin can update, persist, and reset platform settings and feature toggles", async () => {
+  const storage = createMemoryStorage();
+
+  // Reject unauthenticated settings update
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/admin/settings",
+        {
+          method: "PUT",
+          body: JSON.stringify({ themePalette: "emerald_obsidian" }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 401
+  );
+
+  await dispatchLocalApiRequest(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: ADMIN_EMAIL,
+        password: "mmnn8787",
+      }),
+    },
+    storage
+  );
+
+  const updated = await dispatchLocalApiRequest<{
+    settings: {
+      themePalette: string;
+      fontFamily: string;
+      baseFontSize: number;
+      allowRegistration: boolean;
+      allowCoupons: boolean;
+      heroTitle: string;
+    };
+  }>(
+    "/api/admin/settings",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        themePalette: "rose_midnight",
+        fontFamily: "rubik",
+        baseFontSize: 18,
+        allowRegistration: false,
+        allowCoupons: false,
+        heroTitle: "آکادمی تخصصی مهندسی نرم‌افزار",
+      }),
+    },
+    storage
+  );
+
+  assert.equal(updated.settings.themePalette, "rose_midnight");
+  assert.equal(updated.settings.fontFamily, "rubik");
+  assert.equal(updated.settings.baseFontSize, 18);
+  assert.equal(updated.settings.allowRegistration, false);
+
+  // Bootstrap serves persisted settings
+  const boot = await dispatchLocalApiRequest<{
+    settings: { themePalette: string; fontFamily: string; heroTitle: string };
+  }>("/api/bootstrap", {}, storage);
+  assert.equal(boot.settings.themePalette, "rose_midnight");
+  assert.equal(boot.settings.fontFamily, "rubik");
+  assert.equal(boot.settings.heroTitle, "آکادمی تخصصی مهندسی نرم‌افزار");
+
+  // Feature toggles are enforced in backend handlers
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/auth/register",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "کاربر تست",
+            email: "blocked@test.ir",
+            password: "Password123!",
+          }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 403
+  );
+
+  await assert.rejects(
+    () =>
+      dispatchLocalApiRequest(
+        "/api/coupons/validate",
+        {
+          method: "POST",
+          body: JSON.stringify({ code: "BAHAR30" }),
+        },
+        storage
+      ),
+    (err: unknown) => err instanceof LocalApiError && err.status === 400
+  );
+
+  // Reset restores defaults
+  const reset = await dispatchLocalApiRequest<{
+    settings: {
+      themePalette: string;
+      fontFamily: string;
+      baseFontSize: number;
+      allowRegistration: boolean;
+    };
+  }>("/api/admin/settings/reset", { method: "POST" }, storage);
+  assert.equal(reset.settings.themePalette, "indigo_slate");
+  assert.equal(reset.settings.fontFamily, "vazirmatn");
+  assert.equal(reset.settings.baseFontSize, 16);
+  assert.equal(reset.settings.allowRegistration, true);
+});
+

@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 export function CourseDetailPage({ slug }: { slug: string }) {
-  const { user, refreshBootstrap } = useAuth();
+  const { user, settings, refreshBootstrap } = useAuth();
   const { addToCart, setCartDrawerOpen, toggleWishlist, wishlist } = useStore();
   const { push } = useRouter();
 
@@ -388,7 +388,11 @@ export function CourseDetailPage({ slug }: { slug: string }) {
               دیدگاه دانشجویان ({toPersianDigits(course.reviews.length)})
             </h2>
 
-            {user ? (
+            {!settings.allowReviews ? (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-400">
+                ثبت دیدگاه جدید در حال حاضر توسط مدیریت غیرفعال شده است.
+              </div>
+            ) : user ? (
               <form
                 onSubmit={handleSubmitReview}
                 className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4"

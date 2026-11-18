@@ -141,3 +141,60 @@ export interface AppliedCoupon {
   type: DiscountType;
   value: number;
 }
+
+export type ThemePaletteId =
+  | "indigo_slate"
+  | "emerald_obsidian"
+  | "cyan_ocean"
+  | "amber_carbon"
+  | "rose_midnight";
+
+export type SiteFontId =
+  | "vazirmatn"
+  | "rubik"
+  | "readex_pro"
+  | "noto_sans_arabic"
+  | "noto_naskh_arabic";
+
+export type RadiusPresetId = "sharp" | "default" | "rounded";
+
+export interface PlatformSettings {
+  themePalette: ThemePaletteId;
+  fontFamily: SiteFontId;
+  baseFontSize: number;
+  headingScale: number;
+  lineHeight: number;
+  borderRadius: RadiusPresetId;
+
+  brandPrimaryText: string;
+  brandAccentText: string;
+  siteTitle: string;
+  footerTagline: string;
+  copyrightText: string;
+
+  heroKicker: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  featuredCoursesLimit: number;
+
+  showAnnouncementBar: boolean;
+  announcementText: string;
+  announcementLink: string;
+
+  showCategoriesSection: boolean;
+  showRoadmapsSection: boolean;
+  showTestimonialsSection: boolean;
+  showTrustBadges: boolean;
+
+  allowRegistration: boolean;
+  allowCoupons: boolean;
+  allowReviews: boolean;
+
+  showDeveloperInfo: boolean;
+  developerName: string;
+  developerEmail: string;
+  developerPhone: string;
+  developerInstagram: string;
+  developerTelegram: string;
+}
+

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useRouter } from "../router";
+import { useAuth } from "../context/AuthContext";
 import { useStore } from "../store/useStore";
 import { apiRequest } from "../lib/api";
 import { formatToman, toPersianDigits } from "../utils/formatters";
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 import { ArrowLeft, ShoppingBag, Tag, Trash2, X } from "lucide-react";
 
 export function CartPage() {
+  const { settings } = useAuth();
   const {
     cart,
     coupon,
@@ -137,36 +139,38 @@ export function CartPage() {
             خلاصه صورت‌حساب
           </h2>
 
-          <form onSubmit={handleApplyCoupon} className="space-y-2">
-            <label
-              htmlFor="coupon-code-input"
-              className="block text-xs font-semibold text-slate-300"
-            >
-              کد تخفیف دارید؟ (مثلاً BAHAR30 یا WELCOME500)
-            </label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  id="coupon-code-input"
-                  type="text"
-                  dir="ltr"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="BAHAR30"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono uppercase focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={validating}
-                className="rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-600 transition-colors shrink-0 disabled:opacity-50"
+          {settings.allowCoupons && (
+            <form onSubmit={handleApplyCoupon} className="space-y-2">
+              <label
+                htmlFor="coupon-code-input"
+                className="block text-xs font-semibold text-slate-300"
               >
-                {validating ? "..." : "اعمال کد"}
-              </button>
-            </div>
-          </form>
+                کد تخفیف دارید؟ (مثلاً BAHAR30 یا WELCOME500)
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    id="coupon-code-input"
+                    type="text"
+                    dir="ltr"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="BAHAR30"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono uppercase focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={validating}
+                  className="rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-600 transition-colors shrink-0 disabled:opacity-50"
+                >
+                  {validating ? "..." : "اعمال کد"}
+                </button>
+              </div>
+            </form>
+          )}
 
-          {coupon && (
+          {settings.allowCoupons && coupon && (
             <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
               <div className="flex items-center gap-2">
                 <Tag className="h-3.5 w-3.5" />

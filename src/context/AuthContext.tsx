@@ -6,13 +6,19 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import type { CategoryItem, PublicUser } from "../types";
+import type { CategoryItem, PlatformSettings, PublicUser } from "../types";
 import { apiRequest, setAuthToken } from "../lib/api";
+import {
+  DEFAULT_PLATFORM_SETTINGS,
+  applyPlatformSettingsToDocument,
+  mergePlatformSettings,
+} from "../utils/themeSettings";
 
 interface AuthContextValue {
   user: PublicUser | null;
   categories: CategoryItem[];
   enrolledCourseIds: string[];
+  settings: PlatformSettings;
   loading: boolean;
   refreshBootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<PublicUser>;
@@ -24,6 +30,8 @@ interface AuthContextValue {
   }) => Promise<PublicUser>;
   logout: () => Promise<void>;
   setUser: (user: PublicUser | null) => void;
+  previewSettings: (next: PlatformSettings) => void;
+  updateSettingsState: (next: PlatformSettings) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -32,7 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
+  const [settings, setSettings] = useState<PlatformSettings>(
+    DEFAULT_PLATFORM_SETTINGS
+  );
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    applyPlatformSettingsToDocument(settings);
+  }, [settings]);
 
   const refreshBootstrap = useCallback(async () => {
     try {
@@ -40,10 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         categories: CategoryItem[];
         user: PublicUser | null;
         enrolledCourseIds: string[];
+        settings?: PlatformSettings;
       }>("/api/bootstrap");
       setCategories(data.categories);
       setUser(data.user);
       setEnrolledCourseIds(data.enrolledCourseIds);
+      if (data.settings) {
+        setSettings(mergePlatformSettings(data.settings));
+      }
       if (!data.user) {
         setAuthToken(null);
       }
@@ -112,27 +131,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const previewSettings = useCallback((next: PlatformSettings) => {
+    setSettings(mergePlatformSettings(next));
+  }, []);
+
+  const updateSettingsState = useCallback((next: PlatformSettings) => {
+    setSettings(mergePlatformSettings(next));
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       categories,
       enrolledCourseIds,
+      settings,
       loading,
       refreshBootstrap,
       login,
       register,
       logout,
       setUser,
+      previewSettings,
+      updateSettingsState,
     }),
     [
       user,
       categories,
       enrolledCourseIds,
+      settings,
       loading,
       refreshBootstrap,
       login,
       register,
       logout,
+      previewSettings,
+      updateSettingsState,
     ]
   );
 
