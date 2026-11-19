@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import {
   ApiError,
@@ -7,6 +7,17 @@ import {
   resetOfflineFallbackState,
 } from "./api";
 import { createMemoryStorage } from "./localBackend";
+import {
+  resetSupabaseClientForTests,
+  setSupabaseClientForTests,
+} from "./supabase";
+
+before(() => {
+  setSupabaseClientForTests(null);
+});
+after(() => {
+  resetSupabaseClientForTests();
+});
 
 test("apiRequest defaults to direct localStorage mode with zero network calls when VITE_API_URL is unset", async () => {
   const storage = createMemoryStorage();

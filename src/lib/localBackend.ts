@@ -19,9 +19,29 @@ import {
   DEFAULT_PLATFORM_SETTINGS,
   mergePlatformSettings,
 } from "../utils/themeSettings";
+import {
+  fetchAllSupabaseOrders,
+  fetchAllSupabaseUsers,
+  fetchSupabaseOrdersByEmail,
+  fetchSupabaseUserByEmail,
+  fetchSupabaseUserById,
+  generateUuid,
+  insertSupabaseOrder,
+  insertSupabaseUser,
+  mapSupabaseOrderToOrderRecord,
+  mapSupabaseUserToPublicUser,
+  mergeEnrolledCourses,
+  normalizeEnrolledCourses,
+  normalizeRole,
+  updateSupabaseOrderStatus,
+  updateSupabaseUserByEmail,
+  updateSupabaseUserById,
+  type SupabaseUserRow,
+} from "./supabaseStore";
 
 export const DB_STORAGE_KEY = "codeacademy_db_v1";
 export const AUTH_TOKEN_KEY = "codeacademy_auth_token";
+export const SESSION_USER_KEY = "codeacademy_session_user_v1";
 
 export interface StorageAdapter {
   getItem(key: string): string | null;
@@ -1001,6 +1021,93 @@ export class LocalApiError extends Error {
   }
 }
 
+interface CachedSessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  enrolledCourseIds: string[];
+  createdAt: string;
+}
+
+function readCachedSessionUser(storage: StorageAdapter): CachedSessionUser | null {
+  try {
+    const raw = storage.getItem(SESSION_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedSessionUser>;
+    if (!parsed || !parsed.id || !parsed.email) return null;
+    return {
+      id: String(parsed.id),
+      name: String(parsed.name || "کاربر"),
+      email: String(parsed.email).toLowerCase().trim(),
+      role: normalizeRole(parsed.role),
+      enrolledCourseIds: normalizeEnrolledCourses(parsed.enrolledCourseIds),
+      createdAt: parsed.createdAt || new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSessionUser(
+  storage: StorageAdapter,
+  user: PublicUser,
+  enrolledCourseIds: string[]
+): void {
+  const payload: CachedSessionUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email.toLowerCase().trim(),
+    role: user.role,
+    enrolledCourseIds: normalizeEnrolledCourses(enrolledCourseIds),
+    createdAt: user.createdAt,
+  };
+  storage.setItem(SESSION_USER_KEY, JSON.stringify(payload));
+}
+
+function syncSupabaseUserRowIntoDb(
+  db: DatabaseSchema,
+  row: SupabaseUserRow
+): { user: DbUser; enrolledCourseIds: string[] } {
+  const normalizedEmail = String(row.email || "").toLowerCase().trim();
+  const enrolledCourseIds = normalizeEnrolledCourses(row.enrolled_courses);
+  const existingIdx = db.users.findIndex(
+    (u) => u.id === row.id || u.email.toLowerCase() === normalizedEmail
+  );
+  const syncedUser: DbUser = {
+    id: String(row.id),
+    name: String(row.name || "کاربر"),
+    email: normalizedEmail,
+    passwordHash: String(row.password || ""),
+    role: normalizeRole(row.role),
+    phone: existingIdx !== -1 ? db.users[existingIdx].phone : null,
+    bio: existingIdx !== -1 ? db.users[existingIdx].bio : null,
+    isActive: existingIdx !== -1 ? db.users[existingIdx].isActive !== false : true,
+    isEmailVerified: true,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+  if (existingIdx !== -1) {
+    db.users[existingIdx] = syncedUser;
+  } else {
+    db.users.push(syncedUser);
+  }
+
+  for (const courseId of enrolledCourseIds) {
+    const exists = db.enrollments.some(
+      (e) => e.userId === syncedUser.id && e.courseId === courseId
+    );
+    if (!exists) {
+      db.enrollments.push({
+        id: createId("enr"),
+        userId: syncedUser.id,
+        courseId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+  return { user: syncedUser, enrolledCourseIds };
+}
+
 function getAuthenticatedUser(
   db: DatabaseSchema,
   storage: StorageAdapter,
@@ -1010,7 +1117,64 @@ function getAuthenticatedUser(
   const token = authHeader || storage.getItem(AUTH_TOKEN_KEY);
   const userId = parseLocalTokenUserId(token);
   if (!userId) return null;
-  return db.users.find((u) => u.id === userId) ?? null;
+  const fromDb = db.users.find((u) => u.id === userId);
+  if (fromDb) return fromDb;
+
+  const cached = readCachedSessionUser(storage);
+  if (cached && cached.id === userId) {
+    return {
+      id: cached.id,
+      name: cached.name,
+      email: cached.email,
+      passwordHash: "",
+      role: cached.role,
+      phone: null,
+      bio: null,
+      isActive: true,
+      isEmailVerified: true,
+      createdAt: cached.createdAt,
+    };
+  }
+  return null;
+}
+
+async function resolveLiveAuthenticatedSession(
+  db: DatabaseSchema,
+  storage: StorageAdapter,
+  headers?: Record<string, string>
+): Promise<{ user: DbUser | null; enrolledCourseIds: string[] }> {
+  const localUser = getAuthenticatedUser(db, storage, headers);
+  if (!localUser) {
+    return { user: null, enrolledCourseIds: [] };
+  }
+
+  const sbRes = localUser.email
+    ? await fetchSupabaseUserByEmail(localUser.email)
+    : await fetchSupabaseUserById(localUser.id);
+
+  if (sbRes.ok && sbRes.data) {
+    const { user: synced, enrolledCourseIds } = syncSupabaseUserRowIntoDb(
+      db,
+      sbRes.data
+    );
+    const localEnrolled = db.enrollments
+      .filter((e) => e.userId === synced.id)
+      .map((e) => e.courseId);
+    const mergedEnrolled = mergeEnrolledCourses(enrolledCourseIds, localEnrolled);
+    writeLocalDb(db, storage);
+    writeCachedSessionUser(storage, toPublicUser(synced), mergedEnrolled);
+    return { user: synced, enrolledCourseIds: mergedEnrolled };
+  }
+
+  const cached = readCachedSessionUser(storage);
+  const localEnrolled = db.enrollments
+    .filter((e) => e.userId === localUser.id)
+    .map((e) => e.courseId);
+  const mergedEnrolled = mergeEnrolledCourses(
+    cached?.id === localUser.id ? cached.enrolledCourseIds : [],
+    localEnrolled
+  );
+  return { user: localUser, enrolledCourseIds: mergedEnrolled };
 }
 
 function requireUser(
@@ -1069,16 +1233,17 @@ export async function dispatchLocalApiRequest<T>(
 
   // --- BOOTSTRAP ---
   if (method === "GET" && pathname === "/api/bootstrap") {
-    const user = getAuthenticatedUser(db, storage, headers);
+    const { user, enrolledCourseIds } = await resolveLiveAuthenticatedSession(
+      db,
+      storage,
+      headers
+    );
     const categories = db.categories.map((cat) => ({
       ...cat,
       coursesCount: db.courses.filter(
         (c) => c.categoryId === cat.id && c.isPublished
       ).length,
     }));
-    const enrolledCourseIds = user
-      ? db.enrollments.filter((e) => e.userId === user.id).map((e) => e.courseId)
-      : [];
     return {
       categories,
       user: user ? toPublicUser(user) : null,
@@ -1094,39 +1259,85 @@ export async function dispatchLocalApiRequest<T>(
       throw new LocalApiError("لطفاً ایمیل و رمز عبور را وارد کنید.", 400);
     }
     const normalizedEmail = String(email).toLowerCase().trim();
+    const rawPassword = String(password);
 
     let user: DbUser;
+    let enrolledCourseIds: string[] = [];
+
     if (normalizedEmail === ADMIN_EMAIL) {
-      user = authenticateAdminLogin(email, password, db);
+      user = authenticateAdminLogin(email, rawPassword, db);
+      const sbAdmin = await fetchSupabaseUserByEmail(ADMIN_EMAIL);
+      if (sbAdmin.ok && sbAdmin.data) {
+        const synced = syncSupabaseUserRowIntoDb(db, sbAdmin.data);
+        user = { ...synced.user, role: "ADMIN" };
+        enrolledCourseIds = synced.enrolledCourseIds;
+      } else if (sbAdmin.ok && !sbAdmin.data) {
+        // Seed admin row into Supabase public.users on first login if missing
+        await insertSupabaseUser({
+          id: generateUuid(),
+          name: user.name,
+          email: ADMIN_EMAIL,
+          password: user.passwordHash,
+          role: "ADMIN",
+          enrolled_courses: [],
+          created_at: user.createdAt,
+        });
+      }
       writeLocalDb(db, storage);
+      const localEnrolled = db.enrollments
+        .filter((e) => e.userId === user.id)
+        .map((e) => e.courseId);
+      enrolledCourseIds = mergeEnrolledCourses(enrolledCourseIds, localEnrolled);
     } else {
-      const found = db.users.find(
-        (u) =>
-          u.email.toLowerCase() === normalizedEmail && u.role !== "ADMIN"
-      );
-      if (!found) {
-        throw new LocalApiError(
-          "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
-          401
+      const sbLookup = await fetchSupabaseUserByEmail(normalizedEmail);
+      if (sbLookup.ok) {
+        const row = sbLookup.data;
+        if (!row) {
+          throw new LocalApiError(
+            "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
+            401
+          );
+        }
+        const passwordMatches =
+          verifyPasswordSync(rawPassword, String(row.password || "")) ||
+          String(row.password || "") === rawPassword;
+        if (!passwordMatches) {
+          throw new LocalApiError("رمز عبور اشتباه است.", 401);
+        }
+        const synced = syncSupabaseUserRowIntoDb(db, row);
+        user = synced.user;
+        enrolledCourseIds = synced.enrolledCourseIds;
+        writeLocalDb(db, storage);
+      } else {
+        const found = db.users.find(
+          (u) =>
+            u.email.toLowerCase() === normalizedEmail && u.role !== "ADMIN"
         );
+        if (!found) {
+          throw new LocalApiError(
+            "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
+            401
+          );
+        }
+        if (found.isActive === false) {
+          throw new LocalApiError(
+            "حساب کاربری شما توسط مدیریت مسدود شده است.",
+            403
+          );
+        }
+        if (!verifyPasswordSync(rawPassword, found.passwordHash)) {
+          throw new LocalApiError("رمز عبور اشتباه است.", 401);
+        }
+        user = found;
+        enrolledCourseIds = db.enrollments
+          .filter((e) => e.userId === user.id)
+          .map((e) => e.courseId);
       }
-      if (found.isActive === false) {
-        throw new LocalApiError(
-          "حساب کاربری شما توسط مدیریت مسدود شده است.",
-          403
-        );
-      }
-      if (!verifyPasswordSync(String(password), found.passwordHash)) {
-        throw new LocalApiError("رمز عبور اشتباه است.", 401);
-      }
-      user = found;
     }
 
     const token = signLocalToken(user.id);
     storage.setItem(AUTH_TOKEN_KEY, token);
-    const enrolledCourseIds = db.enrollments
-      .filter((e) => e.userId === user.id)
-      .map((e) => e.courseId);
+    writeCachedSessionUser(storage, toPublicUser(user), enrolledCourseIds);
     return {
       user: toPublicUser(user),
       enrolledCourseIds,
@@ -1160,23 +1371,56 @@ export async function dispatchLocalApiRequest<T>(
         403
       );
     }
-    if (db.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+
+    const existingSb = await fetchSupabaseUserByEmail(normalizedEmail);
+    if (existingSb.ok && existingSb.data) {
       throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
     }
-    const newUser: DbUser = {
-      id: createId("usr"),
+    if (!existingSb.ok && db.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+      throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
+    }
+
+    const createdAt = new Date().toISOString();
+    const hashedPassword = hashPasswordSync(String(password));
+    const userId = generateUuid();
+    const sbRow: SupabaseUserRow = {
+      id: userId,
       name: String(name).trim(),
       email: normalizedEmail,
-      passwordHash: hashPasswordSync(String(password)),
+      password: hashedPassword,
       role: "STUDENT",
+      enrolled_courses: [],
+      created_at: createdAt,
+    };
+
+    const insertRes = await insertSupabaseUser(sbRow);
+    if (!insertRes.ok && insertRes.code === "23505") {
+      throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
+    }
+
+    const finalRow = insertRes.ok ? insertRes.data : sbRow;
+    const newUser: DbUser = {
+      id: String(finalRow.id || userId),
+      name: String(finalRow.name || name).trim(),
+      email: normalizedEmail,
+      passwordHash: hashedPassword,
+      role: normalizeRole(finalRow.role),
       phone: phone ? String(phone).trim() : null,
       bio: null,
-      createdAt: new Date().toISOString(),
+      isActive: true,
+      isEmailVerified: true,
+      createdAt: finalRow.created_at || createdAt,
     };
-    db.users.push(newUser);
+    const dupIdx = db.users.findIndex((u) => u.email.toLowerCase() === normalizedEmail);
+    if (dupIdx !== -1) {
+      db.users[dupIdx] = newUser;
+    } else {
+      db.users.push(newUser);
+    }
     writeLocalDb(db, storage);
     const token = signLocalToken(newUser.id);
     storage.setItem(AUTH_TOKEN_KEY, token);
+    writeCachedSessionUser(storage, toPublicUser(newUser), []);
     return {
       user: toPublicUser(newUser),
       enrolledCourseIds: [],
@@ -1186,11 +1430,13 @@ export async function dispatchLocalApiRequest<T>(
 
   if (method === "POST" && pathname === "/api/auth/logout") {
     storage.removeItem(AUTH_TOKEN_KEY);
+    storage.removeItem(SESSION_USER_KEY);
     return { ok: true } as T;
   }
 
   if (method === "POST" && pathname === "/api/auth/logout-all") {
     storage.removeItem(AUTH_TOKEN_KEY);
+    storage.removeItem(SESSION_USER_KEY);
     return { ok: true } as T;
   }
 
@@ -1256,15 +1502,22 @@ export async function dispatchLocalApiRequest<T>(
       throw new LocalApiError("رمز عبور جدید باید حداقل ۶ کاراکتر باشد.", 400);
     }
     const idx = db.users.findIndex((u) => u.id === currentUser.id);
-    if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
+    const existingHash =
+      idx !== -1 ? db.users[idx].passwordHash : currentUser.passwordHash;
     if (
       currentPassword &&
-      !verifyPasswordSync(String(currentPassword), db.users[idx].passwordHash)
+      existingHash &&
+      !verifyPasswordSync(String(currentPassword), existingHash) &&
+      existingHash !== String(currentPassword)
     ) {
       throw new LocalApiError("رمز عبور فعلی اشتباه است.", 400);
     }
-    db.users[idx].passwordHash = hashPasswordSync(String(newPassword));
-    writeLocalDb(db, storage);
+    const nextHash = hashPasswordSync(String(newPassword));
+    if (idx !== -1) {
+      db.users[idx].passwordHash = nextHash;
+      writeLocalDb(db, storage);
+    }
+    await updateSupabaseUserByEmail(currentUser.email, { password: nextHash });
     return { ok: true } as T;
   }
 
@@ -1279,28 +1532,35 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "POST" && pathname === "/api/auth/password/reset") {
     const { email, newPassword } = body;
     const normalizedEmail = String(email ?? "").toLowerCase().trim();
-    const idx = db.users.findIndex(
-      (u) => u.email.toLowerCase() === normalizedEmail
-    );
-    if (idx === -1) {
-      throw new LocalApiError("کاربری با این ایمیل یافت نشد.", 404);
-    }
     if (!newPassword || String(newPassword).length < 6) {
       throw new LocalApiError("رمز عبور جدید باید حداقل ۶ کاراکتر باشد.", 400);
     }
-    db.users[idx].passwordHash = hashPasswordSync(String(newPassword));
-    writeLocalDb(db, storage);
+    const nextHash = hashPasswordSync(String(newPassword));
+    const sbReset = await updateSupabaseUserByEmail(normalizedEmail, {
+      password: nextHash,
+    });
+    const idx = db.users.findIndex(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+    if ((!sbReset.ok || !sbReset.data) && idx === -1) {
+      throw new LocalApiError("کاربری با این ایمیل یافت نشد.", 404);
+    }
+    if (idx !== -1) {
+      db.users[idx].passwordHash = nextHash;
+      writeLocalDb(db, storage);
+    }
     return { ok: true } as T;
   }
 
   if (method === "GET" && pathname === "/api/auth/me") {
-    const user = getAuthenticatedUser(db, storage, headers);
+    const { user, enrolledCourseIds } = await resolveLiveAuthenticatedSession(
+      db,
+      storage,
+      headers
+    );
     if (!user) {
       return { user: null, enrolledCourseIds: [] } as T;
     }
-    const enrolledCourseIds = db.enrollments
-      .filter((e) => e.userId === user.id)
-      .map((e) => e.courseId);
     return { user: toPublicUser(user), enrolledCourseIds } as T;
   }
 
@@ -1310,18 +1570,31 @@ export async function dispatchLocalApiRequest<T>(
     if (!name?.trim()) {
       throw new LocalApiError("نام و نام خانوادگی نمی‌تواند خالی باشد.", 400);
     }
+    const trimmedName = String(name).trim();
+    await updateSupabaseUserByEmail(currentUser.email, { name: trimmedName });
     const idx = db.users.findIndex((u) => u.id === currentUser.id);
-    if (idx === -1) {
-      throw new LocalApiError("کاربر یافت نشد.", 404);
+    if (idx !== -1) {
+      db.users[idx] = {
+        ...db.users[idx],
+        name: trimmedName,
+        phone: phone ? String(phone).trim() : null,
+        bio: bio ? String(bio).trim() : null,
+      };
+      writeLocalDb(db, storage);
+      const enrolledIds = db.enrollments
+        .filter((e) => e.userId === db.users[idx].id)
+        .map((e) => e.courseId);
+      writeCachedSessionUser(storage, toPublicUser(db.users[idx]), enrolledIds);
+      return { user: toPublicUser(db.users[idx]) } as T;
     }
-    db.users[idx] = {
-      ...db.users[idx],
-      name: String(name).trim(),
+    const updatedUser: PublicUser = {
+      ...toPublicUser(currentUser),
+      name: trimmedName,
       phone: phone ? String(phone).trim() : null,
       bio: bio ? String(bio).trim() : null,
     };
-    writeLocalDb(db, storage);
-    return { user: toPublicUser(db.users[idx]) } as T;
+    writeCachedSessionUser(storage, updatedUser, []);
+    return { user: updatedUser } as T;
   }
 
   // --- COURSES PUBLIC ---
@@ -1441,7 +1714,11 @@ export async function dispatchLocalApiRequest<T>(
   const courseDetailMatch = pathname.match(/^\/api\/courses\/([^/]+)$/);
   if (method === "GET" && courseDetailMatch) {
     const slugParam = decodeURIComponent(courseDetailMatch[1]);
-    const user = getAuthenticatedUser(db, storage, headers);
+    const { user, enrolledCourseIds } = await resolveLiveAuthenticatedSession(
+      db,
+      storage,
+      headers
+    );
     const course = db.courses.find(
       (c) => c.slug === slugParam || c.id === slugParam
     );
@@ -1450,9 +1727,7 @@ export async function dispatchLocalApiRequest<T>(
     }
 
     const isEnrolled = user
-      ? db.enrollments.some(
-          (e) => e.userId === user.id && e.courseId === course.id
-        ) || user.role === "ADMIN"
+      ? enrolledCourseIds.includes(course.id) || user.role === "ADMIN"
       : false;
 
     const reviews = db.reviews
@@ -1552,9 +1827,20 @@ export async function dispatchLocalApiRequest<T>(
       appliedCoupon
     );
 
+    const orderId = generateUuid();
+    const createdAt = new Date().toISOString();
     const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const orderItemsPayload = selectedCourses.map((c) => ({
+      id: createId("ori"),
+      courseId: c.id,
+      courseTitle: c.title,
+      courseSlug: c.slug,
+      courseThumbnail: c.thumbnail,
+      price: c.discountPrice !== null ? c.discountPrice : c.price,
+    }));
+
     const order: DbOrder = {
-      id: createId("ord"),
+      id: orderId,
       orderNumber,
       userId: currentUser.id,
       totalAmount: totals.subtotal,
@@ -1563,13 +1849,23 @@ export async function dispatchLocalApiRequest<T>(
       status: "PENDING",
       paymentRef: null,
       couponCode: appliedCoupon ? appliedCoupon.code : null,
-      items: selectedCourses.map((c) => ({
-        id: createId("ori"),
-        courseId: c.id,
-        price: c.discountPrice !== null ? c.discountPrice : c.price,
+      items: orderItemsPayload.map((item) => ({
+        id: item.id,
+        courseId: item.courseId,
+        price: item.price,
       })),
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
+
+    await insertSupabaseOrder({
+      id: orderId,
+      user_email: currentUser.email,
+      user_name: currentUser.name,
+      items: orderItemsPayload,
+      total_amount: totals.finalTotal,
+      status: "PENDING",
+      created_at: createdAt,
+    });
 
     db.orders.push(order);
     writeLocalDb(db, storage);
@@ -1603,6 +1899,7 @@ export async function dispatchLocalApiRequest<T>(
     if (status === "FAILED") {
       db.orders[orderIdx].status = "FAILED";
       writeLocalDb(db, storage);
+      await updateSupabaseOrderStatus(order.id, "FAILED");
       return { success: false, orderNumber: order.orderNumber } as T;
     }
 
@@ -1639,21 +1936,70 @@ export async function dispatchLocalApiRequest<T>(
       newlyEnrolledCourseIds.push(item.courseId);
     }
 
+    // Sync completed order & merged enrolled_courses to Supabase
+    const orderUpdateRes = await updateSupabaseOrderStatus(order.id, "COMPLETED");
+    if (!orderUpdateRes.ok || !orderUpdateRes.data) {
+      const itemsPayload = order.items.map((item) => {
+        const c = db.courses.find((crs) => crs.id === item.courseId);
+        return {
+          id: item.id,
+          courseId: item.courseId,
+          courseTitle: c?.title ?? "دوره آموزشی",
+          courseSlug: c?.slug ?? "",
+          courseThumbnail: c?.thumbnail ?? "",
+          price: item.price,
+        };
+      });
+      await insertSupabaseOrder({
+        id: order.id,
+        user_email: currentUser.email,
+        user_name: currentUser.name,
+        items: itemsPayload,
+        total_amount: order.finalAmount,
+        status: "COMPLETED",
+        created_at: order.createdAt,
+      });
+    }
+
+    const existingLocalEnrolled = db.enrollments
+      .filter((e) => e.userId === currentUser.id)
+      .map((e) => e.courseId);
+    const sbUserRes = await fetchSupabaseUserByEmail(currentUser.email);
+    const existingRemoteEnrolled =
+      sbUserRes.ok && sbUserRes.data
+        ? normalizeEnrolledCourses(sbUserRes.data.enrolled_courses)
+        : [];
+    const mergedEnrolled = mergeEnrolledCourses(
+      existingRemoteEnrolled,
+      mergeEnrolledCourses(existingLocalEnrolled, newlyEnrolledCourseIds)
+    );
+
+    if (sbUserRes.ok && sbUserRes.data) {
+      await updateSupabaseUserById(sbUserRes.data.id, {
+        enrolled_courses: mergedEnrolled,
+      });
+    } else {
+      await updateSupabaseUserByEmail(currentUser.email, {
+        enrolled_courses: mergedEnrolled,
+      });
+    }
+
     writeLocalDb(db, storage);
+    writeCachedSessionUser(storage, toPublicUser(currentUser), mergedEnrolled);
     return {
       success: true,
       orderNumber: order.orderNumber,
       paymentRef,
-      enrolledCourseIds: newlyEnrolledCourseIds,
+      enrolledCourseIds: mergedEnrolled,
     } as T;
   }
 
   // --- STUDENT DASHBOARD ---
   if (method === "GET" && pathname === "/api/student/dashboard") {
-    const currentUser = requireUser(db, storage, headers);
-    const enrolledIds = db.enrollments
-      .filter((e) => e.userId === currentUser.id)
-      .map((e) => e.courseId);
+    const { user: liveUser, enrolledCourseIds: liveEnrolledIds } =
+      await resolveLiveAuthenticatedSession(db, storage, headers);
+    const currentUser = liveUser ?? requireUser(db, storage, headers);
+    const enrolledIds = liveEnrolledIds;
 
     const enrolledCourses = db.courses
       .filter((c) => enrolledIds.includes(c.id))
@@ -1663,23 +2009,29 @@ export async function dispatchLocalApiRequest<T>(
         lessonsCount: c.chapters.reduce((acc, ch) => acc + ch.lessons.length, 0),
       }));
 
-    const orders: OrderRecord[] = db.orders
-      .filter((o) => o.userId === currentUser.id)
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .map((o) => ({
-        ...o,
-        items: o.items.map((item) => {
-          const c = db.courses.find((crs) => crs.id === item.courseId);
-          return {
-            ...item,
-            courseTitle: c?.title ?? "دوره آموزشی",
-            courseSlug: c?.slug ?? "",
-            courseThumbnail: c?.thumbnail ?? "",
-          };
-        }),
-      }));
+    const sbOrdersRes = await fetchSupabaseOrdersByEmail(currentUser.email);
+    const orders: OrderRecord[] = sbOrdersRes.ok
+      ? sbOrdersRes.data.map((row) =>
+          mapSupabaseOrderToOrderRecord(row, db.courses)
+        )
+      : db.orders
+          .filter((o) => o.userId === currentUser.id)
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          .map((o) => ({
+            ...o,
+            items: o.items.map((item) => {
+              const c = db.courses.find((crs) => crs.id === item.courseId);
+              return {
+                ...item,
+                courseTitle: c?.title ?? "دوره آموزشی",
+                courseSlug: c?.slug ?? "",
+                courseThumbnail: c?.thumbnail ?? "",
+              };
+            }),
+          }));
 
     return {
       user: toPublicUser(currentUser),
@@ -1691,55 +2043,88 @@ export async function dispatchLocalApiRequest<T>(
   // --- ADMIN OVERVIEW ---
   if (method === "GET" && pathname === "/api/admin/overview") {
     requireAdminUser(db, storage, headers);
-    const completedOrders = db.orders.filter((o) => o.status === "COMPLETED");
+    const [sbUsersRes, sbOrdersRes] = await Promise.all([
+      fetchAllSupabaseUsers(),
+      fetchAllSupabaseOrders(),
+    ]);
+
+    const publishedCourses = db.courses.filter((c) => c.isPublished).length;
+    const pendingReviewsCount = db.reviews.filter(
+      (r) => (r.status ?? "APPROVED") === "PENDING"
+    ).length;
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    const allOrders: OrderRecord[] = sbOrdersRes.ok
+      ? sbOrdersRes.data.map((row) =>
+          mapSupabaseOrderToOrderRecord(row, db.courses)
+        )
+      : [...db.orders]
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          .map((o) => {
+            const u = db.users.find((usr) => usr.id === o.userId);
+            return {
+              ...o,
+              userName: u?.name ?? "کاربر",
+              userEmail: u?.email ?? "",
+              items: o.items.map((item) => {
+                const c = db.courses.find((crs) => crs.id === item.courseId);
+                return {
+                  ...item,
+                  courseTitle: c?.title ?? "دوره",
+                  courseSlug: c?.slug ?? "",
+                  courseThumbnail: c?.thumbnail ?? "",
+                };
+              }),
+            };
+          });
+
+    const completedOrders = allOrders.filter((o) => o.status === "COMPLETED");
     const totalRevenue = completedOrders.reduce(
       (sum, o) => sum + o.finalAmount,
       0
     );
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const monthlyRevenue = completedOrders
       .filter((o) => new Date(o.createdAt).getTime() >= thirtyDaysAgo)
       .reduce((sum, o) => sum + o.finalAmount, 0);
-    const totalUsers = db.users.length;
-    const totalStudents = db.users.filter((u) => u.role === "STUDENT").length;
-    const totalInstructors = db.users.filter(
-      (u) => u.role === "INSTRUCTOR"
-    ).length;
-    const publishedCourses = db.courses.filter((c) => c.isPublished).length;
-    const totalEnrollments = db.enrollments.length;
-    const pendingReviewsCount = db.reviews.filter(
-      (r) => (r.status ?? "APPROVED") === "PENDING"
-    ).length;
 
-    const recentOrders: OrderRecord[] = [...db.orders]
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, 20)
-      .map((o) => {
-        const u = db.users.find((usr) => usr.id === o.userId);
-        return {
-          ...o,
-          userName: u?.name ?? "کاربر",
-          userEmail: u?.email ?? "",
-          items: o.items.map((item) => {
-            const c = db.courses.find((crs) => crs.id === item.courseId);
-            return {
-              ...item,
-              courseTitle: c?.title ?? "دوره",
-              courseSlug: c?.slug ?? "",
-              courseThumbnail: c?.thumbnail ?? "",
-            };
-          }),
-        };
-      });
+    let totalUsers: number;
+    let totalStudents: number;
+    let totalInstructors: number;
+    let totalEnrollments: number;
+    let recentRegistrations: PublicUser[];
 
-    const recentRegistrations = [...db.users]
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, 10)
-      .map((u) => toPublicUser(u));
+    if (sbUsersRes.ok) {
+      const sbUsers = sbUsersRes.data;
+      totalUsers = sbUsers.length;
+      totalStudents = sbUsers.filter(
+        (u) => normalizeRole(u.role) === "STUDENT"
+      ).length;
+      totalInstructors = sbUsers.filter(
+        (u) => normalizeRole(u.role) === "INSTRUCTOR"
+      ).length;
+      totalEnrollments = sbUsers.reduce(
+        (sum, u) => sum + normalizeEnrolledCourses(u.enrolled_courses).length,
+        0
+      );
+      recentRegistrations = sbUsers
+        .slice(0, 10)
+        .map((u) => mapSupabaseUserToPublicUser(u));
+    } else {
+      totalUsers = db.users.length;
+      totalStudents = db.users.filter((u) => u.role === "STUDENT").length;
+      totalInstructors = db.users.filter((u) => u.role === "INSTRUCTOR").length;
+      totalEnrollments = db.enrollments.length;
+      recentRegistrations = [...db.users]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .slice(0, 10)
+        .map((u) => toPublicUser(u));
+    }
 
     return {
       stats: {
@@ -1748,14 +2133,14 @@ export async function dispatchLocalApiRequest<T>(
         totalInstructors,
         publishedCourses,
         totalCourses: db.courses.length,
-        totalOrdersCount: db.orders.length,
+        totalOrdersCount: allOrders.length,
         completedOrdersCount: completedOrders.length,
         totalRevenue,
         monthlyRevenue,
         totalEnrollments,
         pendingReviewsCount,
       },
-      recentOrders,
+      recentOrders: allOrders.slice(0, 20),
       recentRegistrations,
     } as T;
   }
@@ -2080,6 +2465,29 @@ export async function dispatchLocalApiRequest<T>(
   // --- ADMIN USERS & ENROLLMENTS ---
   if (method === "GET" && pathname === "/api/admin/users") {
     requireAdminUser(db, storage, headers);
+    const [sbUsersRes, sbOrdersRes] = await Promise.all([
+      fetchAllSupabaseUsers(),
+      fetchAllSupabaseOrders(),
+    ]);
+
+    if (sbUsersRes.ok) {
+      const sbOrders = sbOrdersRes.ok ? sbOrdersRes.data : [];
+      const users = sbUsersRes.data.map((u) => {
+        const pub = mapSupabaseUserToPublicUser(u);
+        const emailLower = pub.email.toLowerCase();
+        const enrolledCourseIds = normalizeEnrolledCourses(u.enrolled_courses);
+        const ordersCount = sbOrders.filter(
+          (o) => String(o.user_email || "").toLowerCase().trim() === emailLower
+        ).length;
+        return {
+          ...pub,
+          enrolledCourseIds,
+          ordersCount,
+        };
+      });
+      return { users } as T;
+    }
+
     const users = db.users.map((u) => ({
       ...toPublicUser(u),
       enrolledCourseIds: db.enrollments
@@ -2096,19 +2504,41 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "PATCH" && adminUserRoleMatch) {
     requireAdminUser(db, storage, headers);
     const id = decodeURIComponent(adminUserRoleMatch[1]);
-    const idx = db.users.findIndex((u) => u.id === id);
-    if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
-    if (db.users[idx].email.toLowerCase() === ADMIN_EMAIL) {
-      throw new LocalApiError("نقش مدیر اصلی سیستم قابل تغییر نیست.", 403);
-    }
     if (body?.role === "ADMIN") {
       throw new LocalApiError(
         "دسترسی مدیر فقط برای ایمیل اختصاصی مدیر مجاز است.",
         403
       );
     }
-    db.users[idx].role =
+    const nextRole: UserRole =
       body?.role === "INSTRUCTOR" ? "INSTRUCTOR" : "STUDENT";
+
+    const sbUserRes = await fetchSupabaseUserById(id);
+    if (sbUserRes.ok && sbUserRes.data) {
+      if (sbUserRes.data.email.toLowerCase() === ADMIN_EMAIL) {
+        throw new LocalApiError("نقش مدیر اصلی سیستم قابل تغییر نیست.", 403);
+      }
+      const updated = await updateSupabaseUserById(id, { role: nextRole });
+      const idx = db.users.findIndex((u) => u.id === id);
+      if (idx !== -1) {
+        db.users[idx].role = nextRole;
+        writeLocalDb(db, storage);
+      }
+      return {
+        user: mapSupabaseUserToPublicUser(
+          updated.ok && updated.data
+            ? updated.data
+            : { ...sbUserRes.data, role: nextRole }
+        ),
+      } as T;
+    }
+
+    const idx = db.users.findIndex((u) => u.id === id);
+    if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
+    if (db.users[idx].email.toLowerCase() === ADMIN_EMAIL) {
+      throw new LocalApiError("نقش مدیر اصلی سیستم قابل تغییر نیست.", 403);
+    }
+    db.users[idx].role = nextRole;
     writeLocalDb(db, storage);
     return { user: toPublicUser(db.users[idx]) } as T;
   }
@@ -2116,20 +2546,42 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "POST" && pathname === "/api/admin/enrollments") {
     requireAdminUser(db, storage, headers);
     const { userId, courseId } = body;
-    const exists = db.enrollments.some(
-      (e) => e.userId === userId && e.courseId === courseId
-    );
-    if (exists) {
-      throw new LocalApiError("این دانشجو قبلاً در این دوره ثبت‌نام شده است.", 409);
-    }
     const crsIdx = db.courses.findIndex((c) => c.id === courseId);
     if (crsIdx === -1) throw new LocalApiError("دوره یافت نشد.", 404);
-    db.enrollments.push({
-      id: createId("enr"),
-      userId: String(userId),
-      courseId: String(courseId),
-      createdAt: new Date().toISOString(),
-    });
+
+    const sbUserRes = await fetchSupabaseUserById(String(userId));
+    if (sbUserRes.ok && sbUserRes.data) {
+      const existingCourses = normalizeEnrolledCourses(
+        sbUserRes.data.enrolled_courses
+      );
+      if (existingCourses.includes(String(courseId))) {
+        throw new LocalApiError("این دانشجو قبلاً در این دوره ثبت‌نام شده است.", 409);
+      }
+      const merged = mergeEnrolledCourses(existingCourses, [String(courseId)]);
+      await updateSupabaseUserById(sbUserRes.data.id, {
+        enrolled_courses: merged,
+      });
+    } else {
+      const exists = db.enrollments.some(
+        (e) => e.userId === userId && e.courseId === courseId
+      );
+      if (exists) {
+        throw new LocalApiError("این دانشجو قبلاً در این دوره ثبت‌نام شده است.", 409);
+      }
+    }
+
+    if (
+      !db.enrollments.some(
+        (e) => e.userId === String(userId) && e.courseId === String(courseId)
+      )
+    ) {
+      db.enrollments.push({
+        id: createId("enr"),
+        userId: String(userId),
+        courseId: String(courseId),
+        createdAt: new Date().toISOString(),
+      });
+    }
     db.courses[crsIdx].studentsCount += 1;
     writeLocalDb(db, storage);
     return { ok: true } as T;
@@ -2138,6 +2590,14 @@ export async function dispatchLocalApiRequest<T>(
   // --- ADMIN ORDERS, REVIEWS, USER STATUS & UPLOADS ---
   if (method === "GET" && pathname === "/api/admin/orders") {
     requireAdminUser(db, storage, headers);
+    const sbOrdersRes = await fetchAllSupabaseOrders();
+    if (sbOrdersRes.ok) {
+      const orders: OrderRecord[] = sbOrdersRes.data.map((row) =>
+        mapSupabaseOrderToOrderRecord(row, db.courses)
+      );
+      return { orders } as T;
+    }
+
     const orders: OrderRecord[] = [...db.orders]
       .sort(
         (a, b) =>
@@ -2169,12 +2629,19 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "PATCH" && adminOrderStatusMatch) {
     requireAdminUser(db, storage, headers);
     const id = decodeURIComponent(adminOrderStatusMatch[1]);
+    const nextStatus = (body?.status || "COMPLETED") as OrderStatus;
+    const sbUpdated = await updateSupabaseOrderStatus(id, nextStatus);
     const idx = db.orders.findIndex((o) => o.id === id);
-    if (idx === -1) throw new LocalApiError("سفارش یافت نشد.", 404);
-    if (body?.status) {
-      db.orders[idx].status = body.status as OrderStatus;
+    if (idx !== -1) {
+      db.orders[idx].status = nextStatus;
       writeLocalDb(db, storage);
     }
+    if (sbUpdated.ok && sbUpdated.data) {
+      return {
+        order: mapSupabaseOrderToOrderRecord(sbUpdated.data, db.courses),
+      } as T;
+    }
+    if (idx === -1) throw new LocalApiError("سفارش یافت نشد.", 404);
     return { order: db.orders[idx] } as T;
   }
 

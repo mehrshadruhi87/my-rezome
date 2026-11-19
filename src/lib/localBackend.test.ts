@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import {
   ADMIN_EMAIL,
@@ -9,7 +9,18 @@ import {
   createMemoryStorage,
   dispatchLocalApiRequest,
 } from "./localBackend";
+import {
+  resetSupabaseClientForTests,
+  setSupabaseClientForTests,
+} from "./supabase";
 import type { CategoryItem, CourseSummary, PublicUser } from "../types";
+
+before(() => {
+  setSupabaseClientForTests(null);
+});
+after(() => {
+  resetSupabaseClientForTests();
+});
 
 test("seeds initial categories and courses into storage on bootstrap", async () => {
   const storage = createMemoryStorage();
