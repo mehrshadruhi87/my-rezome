@@ -66,9 +66,14 @@ export function setAuthToken(_token: string | null): void {
 }
 
 const RAW_VITE_API_URL = String(import.meta.env?.VITE_API_URL ?? "").trim();
-const HAS_EXPLICIT_REMOTE_API = /^https?:\/\//i.test(RAW_VITE_API_URL);
+const IS_LOCALHOST_API =
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/api\/?$/i.test(
+    RAW_VITE_API_URL
+  );
+const HAS_EXPLICIT_REMOTE_API =
+  /^https?:\/\//i.test(RAW_VITE_API_URL) && !IS_LOCALHOST_API;
 
-// Default to direct localStorage persistence on static deployments (zero /api/* network calls)
+// Default to direct Supabase + localStorage persistence on static deployments (zero /api/* network calls)
 // unless an explicit external http(s):// VITE_API_URL backend is configured.
 let useLocalFallbackMode = !HAS_EXPLICIT_REMOTE_API;
 let customFallbackStorage: StorageAdapter | undefined;

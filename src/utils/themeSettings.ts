@@ -409,7 +409,14 @@ export function applyPlatformSettingsToDocument(
   const font = getSiteFont(settings.fontFamily);
   const radius = RADIUS_PRESETS[settings.borderRadius] ?? RADIUS_PRESETS.default;
 
+  const isDarkMode = root.classList.contains("dark");
   for (const [key, value] of Object.entries(palette.cssVars)) {
+    if (
+      !isDarkMode &&
+      (key === "--site-bg" || key.startsWith("--color-slate-"))
+    ) {
+      continue;
+    }
     root.style.setProperty(key, value);
   }
 

@@ -4,6 +4,10 @@ import type {
   CourseLevel,
   CourseSummary,
   DiscountCodeItem,
+  InstructorApplication,
+  InstructorStatus,
+  LessonAttachmentItem,
+  NewsArticle,
   OrderRecord,
   OrderStatus,
   PlatformSettings,
@@ -20,20 +24,32 @@ import {
   mergePlatformSettings,
 } from "../utils/themeSettings";
 import {
+  deleteSupabaseNews,
+  deleteSupabaseReview,
+  fetchAllSupabaseInstructors,
+  fetchAllSupabaseNews,
   fetchAllSupabaseOrders,
+  fetchAllSupabaseReviews,
   fetchAllSupabaseUsers,
   fetchSupabaseOrdersByEmail,
+  fetchSupabaseReviewsByCourse,
   fetchSupabaseUserByEmail,
   fetchSupabaseUserById,
   generateUuid,
+  insertSupabaseInstructor,
+  insertSupabaseNews,
   insertSupabaseOrder,
+  insertSupabaseReview,
   insertSupabaseUser,
   mapSupabaseOrderToOrderRecord,
   mapSupabaseUserToPublicUser,
   mergeEnrolledCourses,
   normalizeEnrolledCourses,
   normalizeRole,
+  updateSupabaseInstructorStatus,
+  updateSupabaseNews,
   updateSupabaseOrderStatus,
+  updateSupabaseReviewStatus,
   updateSupabaseUserByEmail,
   updateSupabaseUserById,
   type SupabaseUserRow,
@@ -79,12 +95,14 @@ export interface DbUser {
   id: string;
   name: string;
   email: string;
+  username?: string | null;
   passwordHash: string;
   role: UserRole;
   phone: string | null;
   bio: string | null;
   isActive?: boolean;
   isEmailVerified?: boolean;
+  instructorStatus?: InstructorStatus | null;
   createdAt: string;
 }
 
@@ -97,6 +115,7 @@ export interface DbLesson {
   position: number;
   summary: string;
   codeSnippet: string;
+  attachments?: LessonAttachmentItem[];
 }
 
 export interface DbChapter {
@@ -116,6 +135,10 @@ export interface DbCourse {
   previewVideoUrl: string;
   price: number;
   discountPrice: number | null;
+  fullAccess?: boolean;
+  instructorSharePercent?: number;
+  instructorDiscountPercent?: number;
+  instructorId?: string | null;
   level: CourseLevel;
   duration: string;
   prerequisites: string;
@@ -165,6 +188,8 @@ export interface DbReview {
   rating: number;
   comment: string;
   userId: string;
+  userName?: string;
+  authorRole?: UserRole;
   courseId: string;
   status?: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
@@ -178,6 +203,8 @@ export interface DatabaseSchema {
   orders: DbOrder[];
   reviews: DbReview[];
   discountCodes: DiscountCodeItem[];
+  instructors: InstructorApplication[];
+  news: NewsArticle[];
   settings: PlatformSettings;
 }
 
@@ -216,11 +243,13 @@ export function toPublicUser(user: DbUser): PublicUser {
     id: user.id,
     name: user.name,
     email: user.email,
+    username: user.username ?? null,
     role: user.role,
     phone: user.phone,
     bio: user.bio,
     isActive: user.isActive !== false,
     isEmailVerified: Boolean(user.isEmailVerified),
+    instructorStatus: user.instructorStatus ?? null,
     createdAt: user.createdAt,
   };
 }
@@ -331,6 +360,22 @@ export function buildSeedData(): DatabaseSchema {
       slug: "devops",
       icon: "CloudCog",
       description: "Docker، Kubernetes، CI/CD، Linux و زیرساخت ابری",
+    },
+    {
+      id: "cat_uiux_figma",
+      name: "طراحی رابط کاربری و فیگما (UI/UX & Figma)",
+      slug: "ui-ux-figma",
+      icon: "Palette",
+      description:
+        "طراحی سیستم‌های دیزاین مدرن، پروتوتایپ تعاملی و تجربه کاربری حرفه‌ای با Figma",
+    },
+    {
+      id: "cat_wordpress",
+      name: "طراحی سایت با وردپرس (WordPress & Elementor)",
+      slug: "wordpress",
+      icon: "Globe",
+      description:
+        "ساخت فروشگاه‌های ووکامرس، قالب‌های اختصاصی، المنتور پرو و بهینه‌سازی سرعت و سئو",
     },
   ];
 
@@ -720,7 +765,7 @@ async handleOrderCompleted(@Payload() event: OrderCompletedEvent) {
       instructorBio:
         "مدیر زیرساخت ابری با تجربه مدیریت کلاسترهای بیش از ۲۰۰ نود.",
       isPublished: true,
-      isFeatured: false,
+      isFeatured: true,
       studentsCount: 780,
       rating: 4.8,
       categoryId: "cat_devops",
@@ -781,7 +826,7 @@ RUN npm ci --omit=dev`,
       instructorTitle: "معمار ارشد نرم‌افزار",
       instructorBio: "مدرس دوره‌های مهندسی نرم‌افزار و الگوریتم.",
       isPublished: true,
-      isFeatured: false,
+      isFeatured: true,
       studentsCount: 3410,
       rating: 5.0,
       categoryId: "cat_backend",
@@ -871,20 +916,73 @@ RUN npm ci --omit=dev`,
     {
       id: "rev_seed_1",
       userId: "usr_guest_seed",
+      userName: "سارا شریعتی",
+      authorRole: "STUDENT",
       courseId: courses[0].id,
       rating: 5,
       comment:
         "بهترین و عمیق‌ترین دوره Next.js به زبان فارسی! بخش Server Actions و معماری Prisma واقعا دید من رو به فول‌استک عوض کرد.",
+      status: "APPROVED",
       createdAt: now,
     },
     {
       id: "rev_seed_2",
       userId: adminUser.id,
+      userName: adminUser.name,
+      authorRole: "ADMIN",
       courseId: courses[1].id,
       rating: 5,
       comment:
-        "پروژه‌های عملی بخش LLM و LangChain کاملا منطبق بر نیاز روز شرکت‌هاست.",
+        "نسخه جدید فصل ایجنت‌های هوشمند و فایل‌های پروژه همراه با سورس‌کد کامل به این دوره اضافه شد.",
+      status: "APPROVED",
       createdAt: now,
+    },
+  ];
+
+  const instructors: InstructorApplication[] = [];
+
+  const news: NewsArticle[] = [
+    {
+      id: "news_seed_1",
+      title: "انتشار نسخه جدید TypeScript و بهبود چشمگیر سرعت کامپایلر در پروژه‌های بزرگ",
+      slug: "typescript-compiler-speed-upgrade",
+      summary:
+        "تیم مهندسی تایپ‌اسکریپت از بهینه‌سازی‌های حافظه و پردازش موازی برای کاهش زمان بیلد در مونوریپوهای سازمانی رونمایی کرد.",
+      content:
+        "در به‌روزرسانی جدید اکوسیستم TypeScript، تحلیل تایپ‌ها و بررسی پروژه‌های چندماژولی تا ۴۵ درصد سریع‌تر شده است. توسعه‌دهندگان React و Next.js می‌توانند بدون تغییر در پیکربندی اصلی، از خطاگیری آنی‌تر در ویرایشگر و زمان بیلد کوتاه‌تر در پایپ‌لاین‌های CI/CD بهره‌مند شوند.",
+      category: "توسعه وب",
+      imageUrl: "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+      authorName: "تحریریه کدآکادمی",
+      isPublished: true,
+      createdAt: "2026-11-15T09:00:00.000Z",
+    },
+    {
+      id: "news_seed_2",
+      title: "معماری ایجنت‌های هوشمند چندابزاری: استاندارد جدید مهندسی LLM در سال ۲۰۲۶",
+      slug: "multi-tool-ai-agents-2026",
+      summary:
+        "شرکت‌های فناوری از چت‌بات‌های ساده به سمت ایجنت‌های خودکار با قابلیت اجرای کد، ارزیابی امنیتی و اتصال مستقیم به پایگاه‌داده حرکت کرده‌اند.",
+      content:
+        "مهندسی هوش مصنوعی امروز تنها محدود به نوشتن پرامپت نیست؛ ترکیب سیستم‌های RAG هیبریدی، ابزارهای فراخوانی ساختاریافته (Structured Tool Calling) و لایه‌های کنترلی Guardrails باعث شده است ایجنت‌ها با دقت بالا در فرآیندهای واقعی تولید نرم‌افزار و پشتیبانی فنی به کار گرفته شوند.",
+      category: "هوش مصنوعی",
+      imageUrl: "/src/assets/images/course_ai_llm_1794952832798.jpg",
+      authorName: "دکتر امیرحسین فرهادی",
+      isPublished: true,
+      createdAt: "2026-11-12T11:30:00.000Z",
+    },
+    {
+      id: "news_seed_3",
+      title: "راهنمای عملی طراحی دیزاین‌سیستم در Figma و انتقال بدون خطا به Tailwind v4",
+      slug: "figma-design-system-to-tailwind-v4",
+      summary:
+        "چگونه متغیرهای رنگی و تایپوگرافی در فیگما را مستقیماً به توکن‌های CSS و کلاس‌های Tailwind تبدیل کنیم.",
+      content:
+        "هماهنگی میان طراحان UI/UX و توسعه‌دهندگان فرانت‌اند یکی از کلیدی‌ترین عوامل کیفیت محصول است. با استفاده از Variables در Figma و تعریف متغیرهای استاندارد در Tailwind CSS v4، تغییر تم‌های تاریک و روشن و نگه‌داری کامپوننت‌ها با سرعت چندبرابری انجام می‌شود.",
+      category: "UI/UX و فیگما",
+      imageUrl: "/src/assets/images/course_devops_k8s_1794952834411.jpg",
+      authorName: "تحریریه کدآکادمی",
+      isPublished: true,
+      createdAt: "2026-11-08T14:00:00.000Z",
     },
   ];
 
@@ -896,6 +994,8 @@ RUN npm ci --omit=dev`,
     orders,
     reviews,
     discountCodes,
+    instructors,
+    news,
     settings: { ...DEFAULT_PLATFORM_SETTINGS },
   };
 }
@@ -937,6 +1037,33 @@ function migrateLegacyDemoUsers(db: DatabaseSchema): boolean {
   return changed;
 }
 
+function migrateSchemaExtensions(db: DatabaseSchema): boolean {
+  let changed = false;
+  const seed = buildSeedData();
+
+  if (!Array.isArray(db.instructors)) {
+    db.instructors = [];
+    changed = true;
+  }
+  if (!Array.isArray(db.news)) {
+    db.news = seed.news;
+    changed = true;
+  }
+
+  // Ensure UI/UX & Figma and WordPress departments exist in existing local caches
+  for (const requiredSlug of ["ui-ux-figma", "wordpress"]) {
+    if (!db.categories.some((c) => c.slug === requiredSlug)) {
+      const cat = seed.categories.find((c) => c.slug === requiredSlug);
+      if (cat) {
+        db.categories.push(cat);
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
 export function readLocalDb(
   storage: StorageAdapter = getDefaultStorage()
 ): DatabaseSchema {
@@ -956,6 +1083,9 @@ export function readLocalDb(
       ) {
         const db = parsed as DatabaseSchema;
         let needsSave = migrateLegacyDemoUsers(db);
+        if (migrateSchemaExtensions(db)) {
+          needsSave = true;
+        }
         const normalizedSettings = mergePlatformSettings(db.settings);
         if (!db.settings) {
           db.settings = normalizedSettings;
@@ -997,6 +1127,16 @@ function serializeCourseSummary(
     thumbnail: course.thumbnail,
     price: course.price,
     discountPrice: course.discountPrice,
+    fullAccess: Boolean(course.fullAccess),
+    instructorSharePercent:
+      typeof course.instructorSharePercent === "number"
+        ? course.instructorSharePercent
+        : 70,
+    instructorDiscountPercent:
+      typeof course.instructorDiscountPercent === "number"
+        ? course.instructorDiscountPercent
+        : 0,
+    instructorId: course.instructorId ?? null,
     level: course.level,
     duration: course.duration,
     instructorName: course.instructorName,
@@ -1201,6 +1341,38 @@ function requireAdminUser(
   return user;
 }
 
+function requireAdminOrApprovedInstructor(
+  db: DatabaseSchema,
+  storage: StorageAdapter,
+  headers?: Record<string, string>
+): DbUser {
+  const user = requireUser(db, storage, headers);
+  if (user.role === "ADMIN" && user.email.toLowerCase() === ADMIN_EMAIL) {
+    return user;
+  }
+  const app = db.instructors.find(
+    (inst) =>
+      inst.userId === user.id ||
+      inst.email.toLowerCase() === user.email.toLowerCase()
+  );
+  if (
+    user.role === "INSTRUCTOR" &&
+    (user.instructorStatus === "approved" || app?.status === "approved")
+  ) {
+    return user;
+  }
+  if (app?.status === "pending" || user.instructorStatus === "pending") {
+    throw new LocalApiError(
+      "حساب مدرس شما هنوز توسط مدیریت تایید نشده است. پس از تایید، امکان انتشار دوره فعال می‌شود.",
+      403
+    );
+  }
+  throw new LocalApiError(
+    "انتشار یا ویرایش دوره تنها برای مدیریت و مدرسان تاییدشده مجاز است.",
+    403
+  );
+}
+
 function parseBody(body: BodyInit | null | undefined): Record<string, any> {
   if (!body) return {};
   if (typeof body === "string") {
@@ -1255,24 +1427,27 @@ export async function dispatchLocalApiRequest<T>(
   // --- AUTH ---
   if (method === "POST" && pathname === "/api/auth/login") {
     const { email, password } = body;
-    if (!email || !password) {
-      throw new LocalApiError("لطفاً ایمیل و رمز عبور را وارد کنید.", 400);
+    const identifier = String(email ?? body.identifier ?? "").trim();
+    if (!identifier || !password) {
+      throw new LocalApiError(
+        "لطفاً ایمیل، شماره موبایل یا نام کاربری و رمز عبور را وارد کنید.",
+        400
+      );
     }
-    const normalizedEmail = String(email).toLowerCase().trim();
+    const normalizedIdentifier = identifier.toLowerCase();
     const rawPassword = String(password);
 
     let user: DbUser;
     let enrolledCourseIds: string[] = [];
 
-    if (normalizedEmail === ADMIN_EMAIL) {
-      user = authenticateAdminLogin(email, rawPassword, db);
+    if (normalizedIdentifier === ADMIN_EMAIL) {
+      user = authenticateAdminLogin(identifier, rawPassword, db);
       const sbAdmin = await fetchSupabaseUserByEmail(ADMIN_EMAIL);
       if (sbAdmin.ok && sbAdmin.data) {
         const synced = syncSupabaseUserRowIntoDb(db, sbAdmin.data);
         user = { ...synced.user, role: "ADMIN" };
         enrolledCourseIds = synced.enrolledCourseIds;
       } else if (sbAdmin.ok && !sbAdmin.data) {
-        // Seed admin row into Supabase public.users on first login if missing
         await insertSupabaseUser({
           id: generateUuid(),
           name: user.name,
@@ -1289,15 +1464,18 @@ export async function dispatchLocalApiRequest<T>(
         .map((e) => e.courseId);
       enrolledCourseIds = mergeEnrolledCourses(enrolledCourseIds, localEnrolled);
     } else {
-      const sbLookup = await fetchSupabaseUserByEmail(normalizedEmail);
-      if (sbLookup.ok) {
+      // Allow login by email, phone, or username
+      const localAliasMatch = db.users.find(
+        (u) =>
+          u.role !== "ADMIN" &&
+          (u.email.toLowerCase() === normalizedIdentifier ||
+            (u.phone && u.phone.trim() === identifier) ||
+            (u.username && u.username.toLowerCase() === normalizedIdentifier))
+      );
+      const lookupEmail = localAliasMatch?.email || normalizedIdentifier;
+      const sbLookup = await fetchSupabaseUserByEmail(lookupEmail);
+      if (sbLookup.ok && sbLookup.data) {
         const row = sbLookup.data;
-        if (!row) {
-          throw new LocalApiError(
-            "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
-            401
-          );
-        }
         const passwordMatches =
           verifyPasswordSync(rawPassword, String(row.password || "")) ||
           String(row.password || "") === rawPassword;
@@ -1308,30 +1486,38 @@ export async function dispatchLocalApiRequest<T>(
         user = synced.user;
         enrolledCourseIds = synced.enrolledCourseIds;
         writeLocalDb(db, storage);
-      } else {
-        const found = db.users.find(
-          (u) =>
-            u.email.toLowerCase() === normalizedEmail && u.role !== "ADMIN"
-        );
-        if (!found) {
-          throw new LocalApiError(
-            "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
-            401
-          );
-        }
-        if (found.isActive === false) {
+      } else if (localAliasMatch) {
+        if (localAliasMatch.isActive === false) {
           throw new LocalApiError(
             "حساب کاربری شما توسط مدیریت مسدود شده است.",
             403
           );
         }
-        if (!verifyPasswordSync(rawPassword, found.passwordHash)) {
+        if (!verifyPasswordSync(rawPassword, localAliasMatch.passwordHash)) {
           throw new LocalApiError("رمز عبور اشتباه است.", 401);
         }
-        user = found;
+        user = localAliasMatch;
         enrolledCourseIds = db.enrollments
           .filter((e) => e.userId === user.id)
           .map((e) => e.courseId);
+      } else {
+        throw new LocalApiError(
+          "کاربری با این مشخصات ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
+          401
+        );
+      }
+    }
+
+    // Attach latest instructor status if present
+    const instApp = db.instructors.find(
+      (i) =>
+        i.userId === user.id ||
+        i.email.toLowerCase() === user.email.toLowerCase()
+    );
+    if (instApp) {
+      user.instructorStatus = instApp.status;
+      if (instApp.status === "approved" && user.role === "STUDENT") {
+        user.role = "INSTRUCTOR";
       }
     }
 
@@ -1352,19 +1538,25 @@ export async function dispatchLocalApiRequest<T>(
         403
       );
     }
-    const { name, email, password, phone } = body;
-    if (
-      !name?.trim() ||
-      !email?.trim() ||
-      !password ||
-      String(password).length < 6
-    ) {
+    const { name, email, password, phone, username } = body;
+    if (!name?.trim() || !password || String(password).length < 6) {
       throw new LocalApiError(
-        "نام، ایمیل معتبر و رمز عبور حداقل ۶ کاراکتری الزامی است.",
+        "نام و رمز عبور حداقل ۶ کاراکتری الزامی است.",
         400
       );
     }
-    const normalizedEmail = String(email).toLowerCase().trim();
+
+    const rawEmail = String(email ?? "").toLowerCase().trim();
+    const cleanPhone = phone ? String(phone).trim() : "";
+    const cleanUsername = username ? String(username).trim() : "";
+
+    // Email is optional on student registration; generate unique synthetic identifier if omitted
+    const syntheticBase =
+      cleanUsername.replace(/[^a-zA-Z0-9._-]/g, "").toLowerCase() ||
+      cleanPhone.replace(/[^0-9]/g, "") ||
+      `student_${Date.now().toString(36)}`;
+    const normalizedEmail = rawEmail || `${syntheticBase}@member.codeacademy.ir`;
+
     if (normalizedEmail === ADMIN_EMAIL) {
       throw new LocalApiError(
         "امکان ثبت‌نام با ایمیل اختصاصی مدیر سیستم وجود ندارد.",
@@ -1374,10 +1566,19 @@ export async function dispatchLocalApiRequest<T>(
 
     const existingSb = await fetchSupabaseUserByEmail(normalizedEmail);
     if (existingSb.ok && existingSb.data) {
-      throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
+      throw new LocalApiError("این حساب کاربری قبلاً ثبت شده است.", 409);
     }
-    if (!existingSb.ok && db.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
-      throw new LocalApiError("این ایمیل قبلاً ثبت شده است.", 409);
+    if (
+      !existingSb.ok &&
+      db.users.some(
+        (u) =>
+          u.email.toLowerCase() === normalizedEmail ||
+          (cleanUsername &&
+            u.username?.toLowerCase() === cleanUsername.toLowerCase()) ||
+          (cleanPhone && u.phone === cleanPhone)
+      )
+    ) {
+      throw new LocalApiError("این مشخصات کاربری قبلاً ثبت شده است.", 409);
     }
 
     const createdAt = new Date().toISOString();
@@ -1403,15 +1604,18 @@ export async function dispatchLocalApiRequest<T>(
       id: String(finalRow.id || userId),
       name: String(finalRow.name || name).trim(),
       email: normalizedEmail,
+      username: cleanUsername || null,
       passwordHash: hashedPassword,
       role: normalizeRole(finalRow.role),
-      phone: phone ? String(phone).trim() : null,
+      phone: cleanPhone || null,
       bio: null,
       isActive: true,
-      isEmailVerified: true,
+      isEmailVerified: Boolean(rawEmail),
       createdAt: finalRow.created_at || createdAt,
     };
-    const dupIdx = db.users.findIndex((u) => u.email.toLowerCase() === normalizedEmail);
+    const dupIdx = db.users.findIndex(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
     if (dupIdx !== -1) {
       db.users[dupIdx] = newUser;
     } else {
@@ -1423,6 +1627,112 @@ export async function dispatchLocalApiRequest<T>(
     writeCachedSessionUser(storage, toPublicUser(newUser), []);
     return {
       user: toPublicUser(newUser),
+      enrolledCourseIds: [],
+      token,
+    } as T;
+  }
+
+  // --- INSTRUCTOR REGISTRATION ---
+  if (method === "POST" && pathname === "/api/auth/register-instructor") {
+    const { name, email, password, phone, specialty, bio } = body;
+    if (
+      !name?.trim() ||
+      !specialty?.trim() ||
+      !password ||
+      String(password).length < 6
+    ) {
+      throw new LocalApiError(
+        "نام، حوزه تخصصی و رمز عبور حداقل ۶ کاراکتری برای ثبت‌نام مدرس الزامی است.",
+        400
+      );
+    }
+    const cleanPhone = phone ? String(phone).trim() : "";
+    const rawEmail = String(email ?? "").toLowerCase().trim();
+    const normalizedEmail =
+      rawEmail ||
+      `instructor_${cleanPhone.replace(/[^0-9]/g, "") || Date.now().toString(36)}@instructor.codeacademy.ir`;
+
+    if (normalizedEmail === ADMIN_EMAIL) {
+      throw new LocalApiError(
+        "امکان ثبت‌نام مدرس با ایمیل مدیر سیستم وجود ندارد.",
+        403
+      );
+    }
+
+    const createdAt = new Date().toISOString();
+    const hashedPassword = hashPasswordSync(String(password));
+    const userId = generateUuid();
+
+    const sbUserRes = await insertSupabaseUser({
+      id: userId,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: "STUDENT",
+      enrolled_courses: [],
+      created_at: createdAt,
+    });
+
+    const resolvedUserId =
+      sbUserRes.ok && sbUserRes.data ? String(sbUserRes.data.id) : userId;
+
+    const newUser: DbUser = {
+      id: resolvedUserId,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      passwordHash: hashedPassword,
+      role: "STUDENT",
+      phone: cleanPhone || null,
+      bio: bio ? String(bio).trim() : null,
+      isActive: true,
+      isEmailVerified: Boolean(rawEmail),
+      instructorStatus: "pending",
+      createdAt,
+    };
+
+    const existingUserIdx = db.users.findIndex(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+    if (existingUserIdx !== -1) {
+      db.users[existingUserIdx] = newUser;
+    } else {
+      db.users.push(newUser);
+    }
+
+    const application: InstructorApplication = {
+      id: generateUuid(),
+      userId: resolvedUserId,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      phone: cleanPhone || null,
+      specialty: String(specialty).trim(),
+      bio: String(bio ?? "").trim(),
+      status: "pending",
+      createdAt,
+    };
+
+    await insertSupabaseInstructor({
+      id: application.id,
+      user_id: application.userId,
+      name: application.name,
+      email: application.email,
+      phone: application.phone,
+      specialty: application.specialty,
+      bio: application.bio,
+      status: "pending",
+      created_at: createdAt,
+    });
+
+    db.instructors.unshift(application);
+    writeLocalDb(db, storage);
+
+    const token = signLocalToken(newUser.id);
+    storage.setItem(AUTH_TOKEN_KEY, token);
+    writeCachedSessionUser(storage, toPublicUser(newUser), []);
+
+    return {
+      user: toPublicUser(newUser),
+      application,
       enrolledCourseIds: [],
       token,
     } as T;
@@ -1688,14 +1998,37 @@ export async function dispatchLocalApiRequest<T>(
       throw new LocalApiError("دوره یافت نشد.", 404);
     }
     const numericRating = Math.min(5, Math.max(1, Number(rating) || 5));
-    const review = {
-      id: createId("rev"),
+    const reviewId = generateUuid();
+    const createdAt = new Date().toISOString();
+    const authorRole: UserRole =
+      currentUser.email.toLowerCase() === ADMIN_EMAIL
+        ? "ADMIN"
+        : currentUser.role;
+
+    const review: DbReview = {
+      id: reviewId,
       courseId: db.courses[courseIdx].id,
       userId: currentUser.id,
+      userName: currentUser.name,
+      authorRole,
       rating: numericRating,
       comment: String(comment).trim(),
-      createdAt: new Date().toISOString(),
+      status: "APPROVED",
+      createdAt,
     };
+
+    await insertSupabaseReview({
+      id: reviewId,
+      course_id: review.courseId,
+      user_id: review.userId,
+      user_name: currentUser.name,
+      author_role: authorRole,
+      rating: numericRating,
+      comment: review.comment,
+      status: "APPROVED",
+      created_at: createdAt,
+    });
+
     db.reviews.push(review);
     const courseReviews = db.reviews.filter(
       (r) => r.courseId === db.courses[courseIdx].id
@@ -1705,7 +2038,7 @@ export async function dispatchLocalApiRequest<T>(
     db.courses[courseIdx].rating = Number(avg.toFixed(1));
     writeLocalDb(db, storage);
     return {
-      review: { ...review, userName: currentUser.name },
+      review: { ...review, userName: currentUser.name, authorRole },
       rating: db.courses[courseIdx].rating,
     } as T;
   }
@@ -1722,26 +2055,59 @@ export async function dispatchLocalApiRequest<T>(
     const course = db.courses.find(
       (c) => c.slug === slugParam || c.id === slugParam
     );
-    if (!course || (!course.isPublished && user?.role !== "ADMIN")) {
+    if (
+      !course ||
+      (!course.isPublished &&
+        user?.role !== "ADMIN" &&
+        user?.role !== "INSTRUCTOR")
+    ) {
       throw new LocalApiError("دوره مورد نظر یافت نشد.", 404);
     }
 
-    const isEnrolled = user
-      ? enrolledCourseIds.includes(course.id) || user.role === "ADMIN"
-      : false;
+    const isEnrolled = course.fullAccess
+      ? true
+      : user
+        ? enrolledCourseIds.includes(course.id) || user.role === "ADMIN"
+        : false;
 
-    const reviews = db.reviews
-      .filter((r) => r.courseId === course.id)
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .map((r) => {
-        const author = db.users.find((u) => u.id === r.userId);
-        return {
-          ...r,
-          userName: author?.name ?? "کاربر کدآکادمی",
-        };
-      });
+    const sbRevRes = await fetchSupabaseReviewsByCourse(course.id);
+    const reviews =
+      sbRevRes.ok && sbRevRes.data.length > 0
+        ? sbRevRes.data
+            .filter((r) => String(r.status || "APPROVED") !== "REJECTED")
+            .map((r) => ({
+              id: String(r.id),
+              courseId: String(r.course_id),
+              userId: String(r.user_id),
+              userName: String(r.user_name || "کاربر کدآکادمی"),
+              authorRole: normalizeRole(r.author_role),
+              rating: Number(r.rating) || 5,
+              comment: String(r.comment || ""),
+              status: (r.status || "APPROVED") as
+                | "PENDING"
+                | "APPROVED"
+                | "REJECTED",
+              createdAt: r.created_at || new Date().toISOString(),
+            }))
+        : db.reviews
+            .filter(
+              (r) =>
+                r.courseId === course.id &&
+                (r.status ?? "APPROVED") !== "REJECTED"
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime()
+            )
+            .map((r) => {
+              const author = db.users.find((u) => u.id === r.userId);
+              return {
+                ...r,
+                userName: r.userName ?? author?.name ?? "کاربر کدآکادمی",
+                authorRole: r.authorRole ?? author?.role ?? "STUDENT",
+              };
+            });
 
     const summary = serializeCourseSummary(course, db);
     const detail: CourseDetail = {
@@ -1756,6 +2122,8 @@ export async function dispatchLocalApiRequest<T>(
         lessons: ch.lessons.map((les) => ({
           ...les,
           codeSnippet: les.isFree || isEnrolled ? les.codeSnippet : "",
+          attachments:
+            les.isFree || isEnrolled ? les.attachments ?? [] : [],
         })),
       })),
       reviews,
@@ -2145,9 +2513,9 @@ export async function dispatchLocalApiRequest<T>(
     } as T;
   }
 
-  // --- ADMIN COURSES ---
+  // --- ADMIN / APPROVED INSTRUCTOR COURSES ---
   if (method === "POST" && pathname === "/api/admin/courses") {
-    requireAdminUser(db, storage, headers);
+    const actor = requireAdminOrApprovedInstructor(db, storage, headers);
     if (!body.title?.trim() || !body.categoryId) {
       throw new LocalApiError("عنوان دوره و دسته‌بندی الزامی است.", 400);
     }
@@ -2174,13 +2542,28 @@ export async function dispatchLocalApiRequest<T>(
         Number(body.discountPrice) >= 0
           ? Number(body.discountPrice)
           : null,
+      fullAccess: Boolean(body.fullAccess ?? false),
+      instructorSharePercent:
+        body.instructorSharePercent !== undefined
+          ? Math.min(100, Math.max(0, Number(body.instructorSharePercent) || 70))
+          : 70,
+      instructorDiscountPercent:
+        body.instructorDiscountPercent !== undefined
+          ? Math.min(
+              100,
+              Math.max(0, Number(body.instructorDiscountPercent) || 0)
+            )
+          : 0,
+      instructorId: actor.role === "INSTRUCTOR" ? actor.id : null,
       level: body.level || "ALL_LEVELS",
       duration: String(body.duration || "۲۰ ساعت").trim(),
       prerequisites: String(
         body.prerequisites || "آشنایی مقدماتی با کامپیوتر"
       ).trim(),
       language: "فارسی",
-      instructorName: String(body.instructorName || "مدرس کدآکادمی").trim(),
+      instructorName: String(
+        body.instructorName || actor.name || "مدرس کدآکادمی"
+      ).trim(),
       instructorTitle: String(
         body.instructorTitle || "مهندس ارشد نرم‌افزار"
       ).trim(),
@@ -2199,18 +2582,32 @@ export async function dispatchLocalApiRequest<T>(
             title: String(ch.title || `فصل ${cIdx + 1}`).trim(),
             position: cIdx + 1,
             lessons: Array.isArray(ch.lessons)
-              ? ch.lessons.map((les: any, lIdx: number) => ({
-                  id: les.id || createId("ls"),
-                  title: String(les.title || `درس ${lIdx + 1}`).trim(),
-                  duration: String(les.duration || "۱۵:۰۰").trim(),
-                  videoUrl: String(les.videoUrl || "").trim(),
-                  isFree: Boolean(les.isFree),
-                  position: lIdx + 1,
-                  summary: String(
-                    les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
-                  ).trim(),
-                  codeSnippet: String(les.codeSnippet || "").trim(),
-                }))
+              ? ch.lessons.map((les: any, lIdx: number) => {
+                  const lessonId = les.id || createId("ls");
+                  return {
+                    id: lessonId,
+                    title: String(les.title || `درس ${lIdx + 1}`).trim(),
+                    duration: String(les.duration || "۱۵:۰۰").trim(),
+                    videoUrl: String(les.videoUrl || "").trim(),
+                    isFree: Boolean(les.isFree),
+                    position: lIdx + 1,
+                    summary: String(
+                      les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
+                    ).trim(),
+                    codeSnippet: String(les.codeSnippet || "").trim(),
+                    attachments: Array.isArray(les.attachments)
+                      ? les.attachments.map((att: any) => ({
+                          id: att.id || createId("att"),
+                          lessonId,
+                          title: String(att.title || "فایل ضمیمه").trim(),
+                          fileUrl: String(att.fileUrl || "").trim(),
+                          fileType: String(att.fileType || "file"),
+                          fileSize: Number(att.fileSize) || 0,
+                          createdAt: att.createdAt || now,
+                        }))
+                      : [],
+                  };
+                })
               : [],
           }))
         : [],
@@ -2227,7 +2624,7 @@ export async function dispatchLocalApiRequest<T>(
     /^\/api\/admin\/courses\/([^/]+)\/duplicate$/
   );
   if (method === "POST" && adminCourseDupMatch) {
-    requireAdminUser(db, storage, headers);
+    requireAdminOrApprovedInstructor(db, storage, headers);
     const id = decodeURIComponent(adminCourseDupMatch[1]);
     const existing = db.courses.find((c) => c.id === id);
     if (!existing) {
@@ -2257,7 +2654,7 @@ export async function dispatchLocalApiRequest<T>(
 
   const adminCourseMatch = pathname.match(/^\/api\/admin\/courses\/([^/]+)$/);
   if (adminCourseMatch) {
-    requireAdminUser(db, storage, headers);
+    const actor = requireAdminOrApprovedInstructor(db, storage, headers);
     const id = decodeURIComponent(adminCourseMatch[1]);
 
     if (method === "GET") {
@@ -2273,6 +2670,7 @@ export async function dispatchLocalApiRequest<T>(
       const cleanSlug = body.slug?.trim()
         ? generateSlug(body.slug)
         : existing.slug;
+      const now = new Date().toISOString();
       db.courses[idx] = {
         ...existing,
         title: body.title ? String(body.title).trim() : existing.title,
@@ -2304,6 +2702,24 @@ export async function dispatchLocalApiRequest<T>(
               ? Number(body.discountPrice)
               : null
             : existing.discountPrice,
+        fullAccess:
+          body.fullAccess !== undefined
+            ? Boolean(body.fullAccess)
+            : existing.fullAccess,
+        instructorSharePercent:
+          body.instructorSharePercent !== undefined
+            ? Math.min(
+                100,
+                Math.max(0, Number(body.instructorSharePercent) || 0)
+              )
+            : existing.instructorSharePercent,
+        instructorDiscountPercent:
+          body.instructorDiscountPercent !== undefined
+            ? Math.min(
+                100,
+                Math.max(0, Number(body.instructorDiscountPercent) || 0)
+              )
+            : existing.instructorDiscountPercent,
         level: body.level || existing.level,
         duration: body.duration ? String(body.duration).trim() : existing.duration,
         prerequisites:
@@ -2331,28 +2747,48 @@ export async function dispatchLocalApiRequest<T>(
               title: String(ch.title || `فصل ${cIdx + 1}`).trim(),
               position: cIdx + 1,
               lessons: Array.isArray(ch.lessons)
-                ? ch.lessons.map((les: any, lIdx: number) => ({
-                    id: les.id || createId("ls"),
-                    title: String(les.title || `درس ${lIdx + 1}`).trim(),
-                    duration: String(les.duration || "۱۵:۰۰").trim(),
-                    videoUrl: String(les.videoUrl || "").trim(),
-                    isFree: Boolean(les.isFree),
-                    position: lIdx + 1,
-                    summary: String(
-                      les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
-                    ).trim(),
-                    codeSnippet: String(les.codeSnippet || "").trim(),
-                  }))
+                ? ch.lessons.map((les: any, lIdx: number) => {
+                    const lessonId = les.id || createId("ls");
+                    return {
+                      id: lessonId,
+                      title: String(les.title || `درس ${lIdx + 1}`).trim(),
+                      duration: String(les.duration || "۱۵:۰۰").trim(),
+                      videoUrl: String(les.videoUrl || "").trim(),
+                      isFree: Boolean(les.isFree),
+                      position: lIdx + 1,
+                      summary: String(
+                        les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
+                      ).trim(),
+                      codeSnippet: String(les.codeSnippet || "").trim(),
+                      attachments: Array.isArray(les.attachments)
+                        ? les.attachments.map((att: any) => ({
+                            id: att.id || createId("att"),
+                            lessonId,
+                            title: String(att.title || "فایل ضمیمه").trim(),
+                            fileUrl: String(att.fileUrl || "").trim(),
+                            fileType: String(att.fileType || "file"),
+                            fileSize: Number(att.fileSize) || 0,
+                            createdAt: att.createdAt || now,
+                          }))
+                        : [],
+                    };
+                  })
                 : [],
             }))
           : existing.chapters,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       };
       writeLocalDb(db, storage);
       return { course: serializeCourseSummary(db.courses[idx], db) } as T;
     }
 
     if (method === "DELETE") {
+      if (actor.role !== "ADMIN") {
+        const target = db.courses.find((c) => c.id === id);
+        if (target && target.instructorId !== actor.id) {
+          throw new LocalApiError("حذف دوره سایر مدرسان مجاز نیست.", 403);
+        }
+      }
       db.courses = db.courses.filter((c) => c.id !== id);
       db.enrollments = db.enrollments.filter((e) => e.courseId !== id);
       db.reviews = db.reviews.filter((r) => r.courseId !== id);
@@ -2647,6 +3083,29 @@ export async function dispatchLocalApiRequest<T>(
 
   if (method === "GET" && pathname === "/api/admin/reviews") {
     requireAdminUser(db, storage, headers);
+    const sbRevRes = await fetchAllSupabaseReviews();
+    if (sbRevRes.ok && sbRevRes.data.length > 0) {
+      const reviews = sbRevRes.data.map((r) => {
+        const c = db.courses.find((crs) => crs.id === r.course_id);
+        return {
+          id: String(r.id),
+          courseId: String(r.course_id),
+          userId: String(r.user_id),
+          userName: String(r.user_name || "دانشجو"),
+          authorRole: normalizeRole(r.author_role),
+          rating: Number(r.rating) || 5,
+          comment: String(r.comment || ""),
+          status: (r.status || "APPROVED") as
+            | "PENDING"
+            | "APPROVED"
+            | "REJECTED",
+          courseTitle: c?.title ?? "دوره",
+          createdAt: r.created_at || new Date().toISOString(),
+        };
+      });
+      return { reviews } as T;
+    }
+
     const reviews = [...db.reviews]
       .sort(
         (a, b) =>
@@ -2658,7 +3117,8 @@ export async function dispatchLocalApiRequest<T>(
         return {
           ...r,
           status: r.status ?? "APPROVED",
-          userName: u?.name ?? "دانشجو",
+          userName: r.userName ?? u?.name ?? "دانشجو",
+          authorRole: r.authorRole ?? u?.role ?? "STUDENT",
           courseTitle: c?.title ?? "دوره",
         };
       });
@@ -2671,20 +3131,257 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "PATCH" && adminReviewModMatch) {
     requireAdminUser(db, storage, headers);
     const id = decodeURIComponent(adminReviewModMatch[1]);
+    const nextStatus = body?.status ?? "APPROVED";
+    await updateSupabaseReviewStatus(id, nextStatus);
     const idx = db.reviews.findIndex((r) => r.id === id);
-    if (idx === -1) throw new LocalApiError("دیدگاه یافت نشد.", 404);
-    db.reviews[idx].status = body?.status ?? "APPROVED";
-    writeLocalDb(db, storage);
-    return { review: db.reviews[idx] } as T;
+    if (idx !== -1) {
+      db.reviews[idx].status = nextStatus;
+      writeLocalDb(db, storage);
+      return { review: db.reviews[idx] } as T;
+    }
+    return { review: { id, status: nextStatus } } as T;
   }
 
   const deleteReviewMatch = pathname.match(/^\/api\/reviews\/([^/]+)$/);
   if (method === "DELETE" && deleteReviewMatch) {
     requireUser(db, storage, headers);
     const id = decodeURIComponent(deleteReviewMatch[1]);
+    await deleteSupabaseReview(id);
     db.reviews = db.reviews.filter((r) => r.id !== id);
     writeLocalDb(db, storage);
     return { ok: true } as T;
+  }
+
+  // --- ADMIN INSTRUCTOR APPLICATIONS ---
+  if (method === "GET" && pathname === "/api/admin/instructors") {
+    requireAdminUser(db, storage, headers);
+    const sbInst = await fetchAllSupabaseInstructors();
+    if (sbInst.ok && sbInst.data.length > 0) {
+      const merged: InstructorApplication[] = sbInst.data.map((row) => ({
+        id: String(row.id),
+        userId: String(row.user_id),
+        name: String(row.name),
+        email: String(row.email),
+        phone: row.phone ?? null,
+        specialty: String(row.specialty || "برنامه‌نویسی"),
+        bio: String(row.bio || ""),
+        status: (row.status === "approved" || row.status === "rejected"
+          ? row.status
+          : "pending") as InstructorStatus,
+        createdAt: row.created_at || new Date().toISOString(),
+      }));
+      return { instructors: merged } as T;
+    }
+    return { instructors: db.instructors } as T;
+  }
+
+  const adminInstructorStatusMatch = pathname.match(
+    /^\/api\/admin\/instructors\/([^/]+)\/status$/
+  );
+  if (method === "PATCH" && adminInstructorStatusMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminInstructorStatusMatch[1]);
+    const nextStatus: InstructorStatus =
+      body?.status === "approved"
+        ? "approved"
+        : body?.status === "rejected"
+          ? "rejected"
+          : "pending";
+
+    await updateSupabaseInstructorStatus(id, nextStatus);
+    const idx = db.instructors.findIndex((i) => i.id === id);
+    let targetEmail = String(body?.email || "").toLowerCase().trim();
+    let targetUserId = String(body?.userId || "");
+
+    if (idx !== -1) {
+      db.instructors[idx].status = nextStatus;
+      targetEmail = targetEmail || db.instructors[idx].email.toLowerCase();
+      targetUserId = targetUserId || db.instructors[idx].userId;
+    }
+
+    const nextRole: UserRole =
+      nextStatus === "approved" ? "INSTRUCTOR" : "STUDENT";
+    if (targetEmail) {
+      await updateSupabaseUserByEmail(targetEmail, { role: nextRole });
+    }
+    const uIdx = db.users.findIndex(
+      (u) =>
+        (targetUserId && u.id === targetUserId) ||
+        (targetEmail && u.email.toLowerCase() === targetEmail)
+    );
+    if (uIdx !== -1 && db.users[uIdx].email.toLowerCase() !== ADMIN_EMAIL) {
+      db.users[uIdx].role = nextRole;
+      db.users[uIdx].instructorStatus = nextStatus;
+    }
+    writeLocalDb(db, storage);
+    return {
+      instructor:
+        idx !== -1 ? db.instructors[idx] : { id, status: nextStatus },
+    } as T;
+  }
+
+  // --- PROGRAMMING NEWS (PUBLIC & ADMIN) ---
+  if (method === "GET" && pathname === "/api/news") {
+    const sbNews = await fetchAllSupabaseNews();
+    if (sbNews.ok && sbNews.data.length > 0) {
+      const published: NewsArticle[] = sbNews.data
+        .filter((n) => n.is_published)
+        .map((n) => ({
+          id: String(n.id),
+          title: String(n.title),
+          slug: String(n.slug),
+          summary: String(n.summary),
+          content: String(n.content),
+          category: String(n.category || "تکنولوژی"),
+          imageUrl:
+            String(n.image_url || "") ||
+            "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+          authorName: String(n.author_name || "تحریریه کدآکادمی"),
+          isPublished: Boolean(n.is_published),
+          createdAt: n.created_at || new Date().toISOString(),
+        }));
+      return { news: published } as T;
+    }
+    return {
+      news: db.news
+        .filter((n) => n.isPublished)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+    } as T;
+  }
+
+  if (method === "GET" && pathname === "/api/admin/news") {
+    requireAdminUser(db, storage, headers);
+    const sbNews = await fetchAllSupabaseNews();
+    if (sbNews.ok && sbNews.data.length > 0) {
+      const allNews: NewsArticle[] = sbNews.data.map((n) => ({
+        id: String(n.id),
+        title: String(n.title),
+        slug: String(n.slug),
+        summary: String(n.summary),
+        content: String(n.content),
+        category: String(n.category || "تکنولوژی"),
+        imageUrl:
+          String(n.image_url || "") ||
+          "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+        authorName: String(n.author_name || "تحریریه کدآکادمی"),
+        isPublished: Boolean(n.is_published),
+        createdAt: n.created_at || new Date().toISOString(),
+      }));
+      return { news: allNews } as T;
+    }
+    return {
+      news: [...db.news].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
+    } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/admin/news") {
+    const admin = requireAdminUser(db, storage, headers);
+    if (!body?.title?.trim() || !body?.summary?.trim()) {
+      throw new LocalApiError("عنوان و خلاصه خبر الزامی است.", 400);
+    }
+    const createdAt = new Date().toISOString();
+    const id = generateUuid();
+    const article: NewsArticle = {
+      id,
+      title: String(body.title).trim(),
+      slug: generateSlug(body.slug?.trim() || body.title) || createId("news"),
+      summary: String(body.summary).trim(),
+      content: String(body.content || body.summary).trim(),
+      category: String(body.category || "برنامه‌نویسی").trim(),
+      imageUrl:
+        String(body.imageUrl || "").trim() ||
+        "/src/assets/images/course_ai_llm_1794952832798.jpg",
+      authorName: String(body.authorName || admin.name || "مدیریت").trim(),
+      isPublished: Boolean(body.isPublished ?? true),
+      createdAt,
+    };
+
+    await insertSupabaseNews({
+      id: article.id,
+      title: article.title,
+      slug: article.slug,
+      summary: article.summary,
+      content: article.content,
+      category: article.category,
+      image_url: article.imageUrl,
+      author_name: article.authorName,
+      is_published: article.isPublished,
+      created_at: createdAt,
+    });
+
+    db.news.unshift(article);
+    writeLocalDb(db, storage);
+    return { article } as T;
+  }
+
+  const adminNewsMatch = pathname.match(/^\/api\/admin\/news\/([^/]+)$/);
+  if (adminNewsMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminNewsMatch[1]);
+    if (method === "PUT") {
+      const idx = db.news.findIndex((n) => n.id === id);
+      const existing = idx !== -1 ? db.news[idx] : null;
+      const updated: NewsArticle = {
+        id,
+        title: body.title ? String(body.title).trim() : existing?.title || "",
+        slug:
+          body.slug
+            ? generateSlug(body.slug)
+            : existing?.slug || createId("news"),
+        summary:
+          body.summary !== undefined
+            ? String(body.summary).trim()
+            : existing?.summary || "",
+        content:
+          body.content !== undefined
+            ? String(body.content).trim()
+            : existing?.content || "",
+        category:
+          body.category !== undefined
+            ? String(body.category).trim()
+            : existing?.category || "برنامه‌نویسی",
+        imageUrl:
+          body.imageUrl !== undefined
+            ? String(body.imageUrl).trim()
+            : existing?.imageUrl || "",
+        authorName:
+          body.authorName !== undefined
+            ? String(body.authorName).trim()
+            : existing?.authorName || "مدیریت",
+        isPublished:
+          body.isPublished !== undefined
+            ? Boolean(body.isPublished)
+            : existing?.isPublished ?? true,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      };
+      await updateSupabaseNews(id, {
+        title: updated.title,
+        slug: updated.slug,
+        summary: updated.summary,
+        content: updated.content,
+        category: updated.category,
+        image_url: updated.imageUrl,
+        author_name: updated.authorName,
+        is_published: updated.isPublished,
+      });
+      if (idx !== -1) {
+        db.news[idx] = updated;
+        writeLocalDb(db, storage);
+      }
+      return { article: updated } as T;
+    }
+    if (method === "DELETE") {
+      await deleteSupabaseNews(id);
+      db.news = db.news.filter((n) => n.id !== id);
+      writeLocalDb(db, storage);
+      return { ok: true } as T;
+    }
   }
 
   const adminUserStatusMatch = pathname.match(

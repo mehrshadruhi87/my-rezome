@@ -28,9 +28,18 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<PublicUser>;
   register: (payload: {
     name: string;
-    email: string;
+    email?: string;
+    username?: string;
     password: string;
     phone?: string;
+  }) => Promise<PublicUser>;
+  registerInstructor: (payload: {
+    name: string;
+    email?: string;
+    phone?: string;
+    specialty: string;
+    bio?: string;
+    password: string;
   }) => Promise<PublicUser>;
   logout: () => Promise<void>;
   setUser: (user: PublicUser | null) => void;
@@ -95,7 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(
     async (payload: {
       name: string;
-      email: string;
+      email?: string;
+      username?: string;
       password: string;
       phone?: string;
     }) => {
@@ -108,6 +118,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setUser(data.user);
       setEnrolledCourseIds(data.enrolledCourseIds);
+      return data.user;
+    },
+    []
+  );
+
+  const registerInstructor = useCallback(
+    async (payload: {
+      name: string;
+      email?: string;
+      phone?: string;
+      specialty: string;
+      bio?: string;
+      password: string;
+    }) => {
+      const data = await apiRequest<{
+        user: PublicUser;
+        enrolledCourseIds: string[];
+      }>("/api/auth/register-instructor", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setUser(data.user);
+      setEnrolledCourseIds(data.enrolledCourseIds ?? []);
       return data.user;
     },
     []
@@ -142,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshBootstrap,
       login,
       register,
+      registerInstructor,
       logout,
       setUser,
       previewSettings,
@@ -156,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshBootstrap,
       login,
       register,
+      registerInstructor,
       logout,
       previewSettings,
       updateSettingsState,

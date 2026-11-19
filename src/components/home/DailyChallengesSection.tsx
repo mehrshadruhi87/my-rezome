@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
@@ -8,13 +8,16 @@ import {
   type ChallengeProgressState,
   applyChallengeWin,
   evaluateChallengeSubmission,
+  getDailyChallengesForDate,
   getRankInfo,
+  getTodayDateKey,
   loadChallengeProgress,
   saveChallengeProgress,
 } from "../../utils/interactiveCoding";
 import { toPersianDigits } from "../../utils/formatters";
 import {
   Award,
+  Calendar,
   CheckCircle2,
   Flame,
   Lightbulb,
@@ -27,10 +30,19 @@ import {
 
 export function DailyChallengesSection() {
   const { motionDuration } = useUserPreferences();
+  const todayKey = useMemo(() => getTodayDateKey(), []);
+  const todaysChallenges = useMemo(
+    () => getDailyChallengesForDate(todayKey, 4),
+    [todayKey]
+  );
+
+  const [showAllPool, setShowAllPool] = useState(false);
+  const visibleChallenges = showAllPool ? DAILY_CHALLENGES : todaysChallenges;
+
   const [progress, setProgress] = useState<ChallengeProgressState>(() =>
     loadChallengeProgress()
   );
-  const [activeId, setActiveId] = useState(DAILY_CHALLENGES[0].id);
+  const [activeId, setActiveId] = useState(todaysChallenges[0].id);
   const [codeByChallenge, setCodeByChallenge] = useState<
     Record<string, string>
   >(() =>
@@ -45,11 +57,23 @@ export function DailyChallengesSection() {
   }, [progress]);
 
   const activeChallenge =
-    DAILY_CHALLENGES.find((c) => c.id === activeId) ?? DAILY_CHALLENGES[0];
+    visibleChallenges.find((c) => c.id === activeId) ?? visibleChallenges[0];
   const currentCode =
     codeByChallenge[activeChallenge.id] ?? activeChallenge.starterCode;
   const isSolved = progress.solvedIds.includes(activeChallenge.id);
   const rank = getRankInfo(progress.xp);
+
+  const persianTodayLabel = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("fa-IR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      }).format(new Date());
+    } catch {
+      return todayKey;
+    }
+  }, [todayKey]);
 
   const handleSelectChallenge = (id: string) => {
     setActiveId(id);
@@ -79,7 +103,6 @@ export function DailyChallengesSection() {
     setEvaluation(result);
 
     if (result.allPassed) {
-      const todayKey = new Date().toISOString().slice(0, 10);
       const { next, newlySolved } = applyChallengeWin(
         progress,
         activeChallenge,
@@ -93,7 +116,9 @@ export function DailyChallengesSection() {
           )} امتیاز XP دریافت کردید.`
         );
       } else {
-        toast.info("تمام تست‌ها با موفقیت پاس شدند (امتیاز این چالش قبلاً ثبت شده است).");
+        toast.info(
+          "تمام تست‌ها با موفقیت پاس شدند (امتیاز این چالش قبلاً ثبت شده است)."
+        );
       }
     } else {
       toast.error(
@@ -121,29 +146,38 @@ export function DailyChallengesSection() {
       id="challenges"
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.12 }}
+      viewport={{ once: true, amount: 0.1 }}
       transition={{ duration: motionDuration(0.45) }}
-      className="scroll-mt-24 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
+      className="scroll-mt-24 mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-10"
     >
       {/* Header + Gamified Scoreboard Strip */}
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
-            <Trophy className="h-4 w-4" />
-            <span>تمرین الگوریتم و ارتقای رتبه</span>
-          </span>
-          <h2 className="mt-1.5 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
+              <Trophy className="h-4 w-4" />
+              <span>تمرین الگوریتم و ارتقای رتبه</span>
+            </span>
+            <span
+              data-testid="daily-challenge-date"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-[#E9EFF6] dark:bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-300"
+            >
+              <Calendar className="h-3.5 w-3.5 text-[var(--accent-500)]" />
+              <span>بسته روزانه {persianTodayLabel}</span>
+            </span>
+          </div>
+          <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
             سیستم امتیازدهی و چالش‌های روزانه
           </h2>
-          <p className="mt-2 max-w-2xl text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            چالش‌های روزانه برنامه‌نویسی را حل کنید، با تست‌های خودکار اعتبارسنجی شوید و امتیاز XP و رتبه مهندسی خود را ارتقا دهید.
+          <p className="mt-2 max-w-2xl text-xs sm:text-sm text-slate-700 dark:text-slate-400">
+            چالش‌ها هر روز به‌صورت خودکار به‌روزرسانی می‌شوند. پاسخ خود را بنویسید، با تست‌های خودکار اعتبارسنجی شوید و امتیاز XP و استریک خود را افزایش دهید.
           </p>
         </div>
 
         {/* Live XP / Rank / Streak Cards */}
         <div className="grid grid-cols-3 gap-2.5 sm:gap-3 lg:min-w-[440px]">
-          <div className="cyber-glow-card rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/75 px-3.5 py-3 text-right">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
               <Sparkles className="h-3.5 w-3.5 text-[var(--accent-500)]" />
               <span>امتیاز کل</span>
             </div>
@@ -158,9 +192,9 @@ export function DailyChallengesSection() {
             </div>
           </div>
 
-          <div className="cyber-glow-card rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/75 px-3.5 py-3 text-right">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-              <Award className="h-3.5 w-3.5 text-emerald-500" />
+          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
+              <Award className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
               <span>رتبه شما</span>
             </div>
             <div
@@ -171,8 +205,8 @@ export function DailyChallengesSection() {
             </div>
           </div>
 
-          <div className="cyber-glow-card rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/75 px-3.5 py-3 text-right">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
               <Flame className="h-3.5 w-3.5 text-amber-500" />
               <span>استریک</span>
             </div>
@@ -186,21 +220,33 @@ export function DailyChallengesSection() {
         </div>
       </div>
 
-      {/* Rank Progress Bar */}
-      <div className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-5 py-3.5">
+      {/* Rank Progress Bar + Pool Toggle */}
+      <div className="mb-6 rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/60 px-5 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold tabular-nums">
-          <span className="text-slate-700 dark:text-slate-300">
+          <span className="text-slate-800 dark:text-slate-300">
             چالش‌های حل‌شده:{" "}
             <strong className="text-[var(--accent-600)] dark:text-[var(--accent-400)]">
               {toPersianDigits(progress.solvedIds.length)} از{" "}
               {toPersianDigits(DAILY_CHALLENGES.length)}
             </strong>
           </span>
-          <span className="text-slate-500 dark:text-slate-400">
-            مسیر ارتقا به «{rank.nextRankTitle}»: {toPersianDigits(rank.progressPercent)}٪
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-600 dark:text-slate-400">
+              مسیر ارتقا به «{rank.nextRankTitle}»:{" "}
+              {toPersianDigits(rank.progressPercent)}٪
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAllPool((prev) => !prev)}
+              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)] hover:border-[var(--accent-500)] transition-colors"
+            >
+              {showAllPool
+                ? "نمایش چالش‌های منتخب امروز (۴)"
+                : `مشاهده کل آرشیو (${toPersianDigits(DAILY_CHALLENGES.length)})`}
+            </button>
+          </div>
         </div>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-300 dark:bg-slate-800">
           <motion.div
             className="h-full rounded-full bg-gradient-to-l from-emerald-400 to-[var(--accent-500)]"
             initial={false}
@@ -213,8 +259,8 @@ export function DailyChallengesSection() {
       {/* Main Challenges Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Right Column: Challenge List */}
-        <div className="lg:col-span-4 space-y-3">
-          {DAILY_CHALLENGES.map((challenge) => {
+        <div className="lg:col-span-4 space-y-3 max-h-[540px] overflow-y-auto custom-lab-scroll pl-1">
+          {visibleChallenges.map((challenge, idx) => {
             const active = challenge.id === activeChallenge.id;
             const solved = progress.solvedIds.includes(challenge.id);
             return (
@@ -225,18 +271,25 @@ export function DailyChallengesSection() {
                 data-testid={`challenge-item-${challenge.id}`}
                 className={`w-full rounded-2xl border p-4 text-right transition-all ${
                   active
-                    ? "cyber-glow-card border-[var(--accent-500)] bg-[var(--accent-500)]/10 shadow-lg"
-                    : "border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 hover:border-[var(--accent-500)]/50"
+                    ? "cyber-glow-card border-[var(--accent-500)] bg-[var(--accent-500)]/12 shadow-lg"
+                    : "border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 hover:border-[var(--accent-500)]/50"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold ${difficultyBadgeClass(
-                      challenge.difficulty
-                    )}`}
-                  >
-                    {challenge.difficulty}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold ${difficultyBadgeClass(
+                        challenge.difficulty
+                      )}`}
+                    >
+                      {challenge.difficulty}
+                    </span>
+                    {!showAllPool && idx === 0 && (
+                      <span className="rounded-lg bg-[var(--accent-500)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-700)] dark:text-[var(--accent-300)]">
+                        ویژه امروز
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black text-[var(--accent-600)] dark:text-[var(--accent-400)] tabular-nums">
                       +{toPersianDigits(challenge.xp)} XP
@@ -252,7 +305,7 @@ export function DailyChallengesSection() {
                 <h3 className="mt-2.5 text-sm font-black text-slate-900 dark:text-white">
                   {challenge.title}
                 </h3>
-                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
                   {challenge.category}
                 </p>
               </button>
@@ -261,9 +314,9 @@ export function DailyChallengesSection() {
         </div>
 
         {/* Left Column: Active Challenge Workspace */}
-        <div className="lg:col-span-8 cyber-glow-card overflow-hidden rounded-3xl border border-slate-200/90 dark:border-slate-800/90 bg-white/90 dark:bg-slate-900/75 shadow-xl shadow-slate-900/5 dark:shadow-black/30 backdrop-blur-xl">
+        <div className="lg:col-span-8 cyber-glow-card overflow-hidden rounded-3xl border border-slate-300/90 dark:border-slate-800/90 bg-[#E9EFF6]/95 dark:bg-slate-900/75 shadow-xl shadow-slate-900/5 dark:shadow-black/30 backdrop-blur-xl">
           {/* Problem Brief */}
-          <div className="border-b border-slate-200 dark:border-slate-800 p-5 sm:p-6">
+          <div className="border-b border-slate-300 dark:border-slate-800 p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">
@@ -281,7 +334,7 @@ export function DailyChallengesSection() {
               </span>
             </div>
 
-            <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
               {activeChallenge.description}
             </p>
 
@@ -289,7 +342,7 @@ export function DailyChallengesSection() {
               <button
                 type="button"
                 onClick={() => setShowHint((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:border-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
               >
                 <Lightbulb className="h-3.5 w-3.5" />
                 <span>{showHint ? "بستن راهنما" : "نمایش راهنما"}</span>
@@ -298,7 +351,7 @@ export function DailyChallengesSection() {
                 type="button"
                 onClick={handleFillSolution}
                 data-testid="challenge-fill-solution"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 <span>بارگذاری پاسخ نمونه</span>
@@ -306,7 +359,7 @@ export function DailyChallengesSection() {
               <button
                 type="button"
                 onClick={handleResetStarter}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition-colors"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span>کد اولیه</span>
@@ -314,7 +367,7 @@ export function DailyChallengesSection() {
             </div>
 
             {showHint && (
-              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
                 <strong>راهنما: </strong>
                 {activeChallenge.hint}
               </div>
@@ -339,14 +392,14 @@ export function DailyChallengesSection() {
               onChange={(e) => handleCodeChange(e.target.value)}
               spellCheck={false}
               rows={8}
-              className="w-full resize-none bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100 focus:outline-none"
+              className="custom-lab-scroll w-full resize-none bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100 focus:outline-none"
             />
           </div>
 
           {/* Footer Action + Test Cases */}
-          <div className="border-t border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-4">
+          <div className="border-t border-slate-300 dark:border-slate-800 p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
+              <div className="text-xs text-slate-700 dark:text-slate-400 tabular-nums">
                 شامل {toPersianDigits(activeChallenge.testCases.length)} تست
                 خودکار اعتبارسنجی
               </div>
@@ -354,7 +407,7 @@ export function DailyChallengesSection() {
                 type="button"
                 onClick={handleVerify}
                 data-testid="challenge-submit-btn"
-                className="cyber-btn-glow inline-flex items-center gap-2 rounded-xl bg-[var(--accent-600)] px-5 py-2.5 text-xs font-bold text-white hover:bg-[var(--accent-500)] transition-all"
+                className="btn-3d inline-flex items-center gap-2 rounded-xl bg-[var(--accent-600)] px-5 py-2.5 text-xs font-bold text-white hover:bg-[var(--accent-500)] transition-all"
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
                 <span>بررسی و ارسال پاسخ</span>
@@ -364,13 +417,13 @@ export function DailyChallengesSection() {
             {evaluation && (
               <div
                 data-testid="challenge-results"
-                className="space-y-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/75 p-4"
+                className="space-y-2 rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/75 p-4"
               >
                 <div className="flex items-center justify-between text-xs font-bold">
                   <span
                     className={
                       evaluation.allPassed
-                        ? "text-emerald-600 dark:text-emerald-400"
+                        ? "text-emerald-700 dark:text-emerald-400"
                         : "text-rose-600 dark:text-rose-400"
                     }
                   >
@@ -382,7 +435,10 @@ export function DailyChallengesSection() {
                           evaluation.totalCount
                         )} تست موفق`}
                   </span>
-                  <span dir="ltr" className="font-mono text-[11px] text-slate-500">
+                  <span
+                    dir="ltr"
+                    className="font-mono text-[11px] text-slate-500"
+                  >
                     {evaluation.durationMs} ms
                   </span>
                 </div>
@@ -404,7 +460,7 @@ export function DailyChallengesSection() {
                       >
                         <div className="flex items-center gap-2 font-bold">
                           {item.passed ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-500 shrink-0" />
                           ) : (
                             <XCircle className="h-4 w-4 text-rose-500 shrink-0" />
                           )}

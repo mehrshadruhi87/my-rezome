@@ -56,7 +56,7 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
         if (el) el.scrollIntoView({ behavior: "smooth" });
       }, 60);
     } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "instant" });
     }
   }, []);
 

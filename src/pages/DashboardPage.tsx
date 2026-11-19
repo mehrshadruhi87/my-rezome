@@ -47,7 +47,7 @@ interface EnrolledCourse extends CourseSummary {
 
 export function DashboardPage() {
   const { user, loading: authLoading, setUser } = useAuth();
-  const { wishlist, toggleWishlist, addToCart, setCartDrawerOpen } = useStore();
+  const { wishlist, toggleWishlist, addToCart } = useStore();
   const searchParams = useSearchParams();
   const { push } = useRouter();
 
@@ -145,8 +145,8 @@ export function DashboardPage() {
 
   if (authLoading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
-        <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/50 animate-pulse" />
+      <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-10">
+        <div className="h-64 rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E2E8F0] dark:bg-slate-900/50 animate-pulse" />
       </div>
     );
   }
@@ -154,17 +154,17 @@ export function DashboardPage() {
   if (!user) {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 text-center">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 space-y-4">
-          <User className="mx-auto h-10 w-10 text-indigo-400" />
-          <h1 className="text-lg font-black text-white">
+        <div className="rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900 p-8 space-y-4">
+          <User className="mx-auto h-10 w-10 text-[var(--accent-600)] dark:text-indigo-400" />
+          <h1 className="text-lg font-black text-slate-900 dark:text-white">
             دسترسی به پنل دانشجو
           </h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             برای مشاهده دوره‌های ثبت‌نام‌شده و سوابق خرید، وارد حساب کاربری خود شوید.
           </p>
           <Link
             href="/auth/login?redirect=/dashboard"
-            className="inline-block rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white"
+            className="btn-3d inline-block rounded-xl px-6 py-3 text-xs font-bold"
           >
             ورود به حساب
           </Link>
@@ -220,10 +220,16 @@ export function DashboardPage() {
     e.preventDefault();
     setVerifyingEmail(true);
     try {
-      const res = await apiRequest<{ user: PublicUser }>("/api/auth/verify/confirm", {
-        method: "POST",
-        body: JSON.stringify({ channel: "email", code: verifyOtpCode.trim() }),
-      });
+      const res = await apiRequest<{ user: PublicUser }>(
+        "/api/auth/verify/confirm",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            channel: "email",
+            code: verifyOtpCode.trim(),
+          }),
+        }
+      );
       setUser(res.user);
       setVerifyOtpSent(false);
       setVerifyOtpCode("");
@@ -248,7 +254,9 @@ export function DashboardPage() {
       setNewPassword("");
       toast.success("رمز عبور شما با موفقیت تغییر یافت.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "خطا در تغییر رمز عبور");
+      toast.error(
+        err instanceof Error ? err.message : "خطا در تغییر رمز عبور"
+      );
     } finally {
       setChangingPassword(false);
     }
@@ -281,32 +289,38 @@ export function DashboardPage() {
 
   const statusLabel = (status: string) => {
     if (status === "COMPLETED")
-      return { text: "پرداخت موفق", cls: "text-emerald-400" };
+      return { text: "پرداخت موفق", cls: "text-emerald-700 dark:text-emerald-400" };
     if (status === "FAILED")
-      return { text: "ناموفق", cls: "text-rose-400" };
+      return { text: "ناموفق", cls: "text-rose-600 dark:text-rose-400" };
     if (status === "REFUNDED")
-      return { text: "مرجوع شده", cls: "text-sky-400" };
+      return { text: "مرجوع شده", cls: "text-sky-600 dark:text-sky-400" };
     if (status === "CANCELLED")
-      return { text: "لغو شده", cls: "text-slate-400" };
-    return { text: "در انتظار پرداخت", cls: "text-amber-400" };
+      return { text: "لغو شده", cls: "text-slate-500 dark:text-slate-400" };
+    return { text: "در انتظار پرداخت", cls: "text-amber-700 dark:text-amber-400" };
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+    <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-10 space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-300 dark:border-slate-800 pb-6">
         <div>
-          <h1 className="text-2xl font-black text-white">
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white">
             پنل کاربری · {user.name}
           </h1>
-          <p className="mt-1 text-xs text-slate-400">{user.email}</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 font-mono">
+            {user.email || user.phone || user.username}
+          </p>
         </div>
-        {user.role === "ADMIN" && (
+        {(user.role === "ADMIN" || user.role === "INSTRUCTOR") && (
           <Link
             href="/admin"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-4 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           >
             <ShieldAlert className="h-4 w-4" />
-            <span>ورود به کنسول مدیریت</span>
+            <span>
+              {user.role === "ADMIN"
+                ? "ورود به کنسول مدیریت"
+                : "ورود به پنل مدرسین"}
+            </span>
           </Link>
         )}
       </div>
@@ -315,7 +329,7 @@ export function DashboardPage() {
       <div
         role="tablist"
         aria-label="بخش‌های پنل دانشجو"
-        className="flex flex-wrap gap-2 border-b border-slate-800 pb-4"
+        className="flex flex-wrap gap-2 border-b border-slate-300 dark:border-slate-800 pb-4"
       >
         {[
           {
@@ -349,8 +363,8 @@ export function DashboardPage() {
               }}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors whitespace-nowrap ${
                 active
-                  ? "bg-indigo-600 text-white"
-                  : "border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                  ? "bg-[var(--accent-600)] text-white"
+                  : "border border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-[#DFE7F2] dark:hover:bg-slate-800"
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -468,7 +482,8 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => {
                         addToCart(item);
-                        setCartDrawerOpen(true);
+                        toast.success("دوره به سبد خرید اضافه شد.");
+                        push("/cart");
                       }}
                       className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2 text-xs font-bold text-white hover:bg-indigo-500"
                     >

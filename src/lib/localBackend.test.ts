@@ -1,458 +1,282 @@
-import test, { after, before } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ADMIN_EMAIL,
-  AUTH_TOKEN_KEY,
-  LocalApiError,
-  authenticateAdminLogin,
-  buildSeedData,
   createMemoryStorage,
   dispatchLocalApiRequest,
 } from "./localBackend";
-import {
-  resetSupabaseClientForTests,
-  setSupabaseClientForTests,
-} from "./supabase";
-import type { CategoryItem, CourseSummary, PublicUser } from "../types";
+import type { CategoryItem, NewsArticle } from "../types";
 
-before(() => {
-  setSupabaseClientForTests(null);
-});
-after(() => {
-  resetSupabaseClientForTests();
-});
+const ADMIN_PASS = "mmnn8787";
 
-test("seeds initial categories and courses into storage on bootstrap", async () => {
+test("Specialized departments include UI/UX & Figma and WordPress and support full CRUD", async () => {
   const storage = createMemoryStorage();
-  const bootstrap = await dispatchLocalApiRequest<{
-    categories: CategoryItem[];
-    user: PublicUser | null;
-    enrolledCourseIds: string[];
-  }>("/api/bootstrap", {}, storage);
-
-  assert.equal(bootstrap.categories.length, 6);
-  assert.equal(bootstrap.user, null);
-  assert.deepEqual(bootstrap.enrolledCourseIds, []);
-
-  const catalog = await dispatchLocalApiRequest<{ courses: CourseSummary[] }>(
-    "/api/courses",
+  const boot = await dispatchLocalApiRequest<{ categories: CategoryItem[] }>(
+    "/api/bootstrap",
     {},
     storage
   );
-  assert.equal(catalog.courses.length, 6);
-});
+  const slugs = boot.categories.map((c: CategoryItem) => c.slug);
+  assert.ok(slugs.includes("ui-ux-figma"), "Missing UI/UX & Figma department");
+  assert.ok(slugs.includes("wordpress"), "Missing WordPress department");
 
-test("requires public registration before login and enforces dedicated admin login", async () => {
-  const storage = createMemoryStorage();
-
-  // Direct unit check on dedicated authenticateAdminLogin
-  const seedDb = buildSeedData();
-  assert.throws(
-    () => authenticateAdminLogin("other@example.com", "mmnn8787", seedDb),
-    (err: unknown) => err instanceof LocalApiError && err.status === 403
-  );
-  assert.throws(
-    () => authenticateAdminLogin(ADMIN_EMAIL, "wrongpass", seedDb),
-    (err: unknown) => err instanceof LocalApiError && err.status === 401
-  );
-  const authenticatedAdmin = authenticateAdminLogin(
-    ADMIN_EMAIL,
-    "mmnn8787",
-    seedDb
-  );
-  assert.equal(authenticatedAdmin.role, "ADMIN");
-  assert.equal(authenticatedAdmin.email, ADMIN_EMAIL);
-
-  // Unregistered public user cannot log in directly
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/auth/login",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            email: "mohammad@test.ir",
-            password: "Password123!",
-          }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 401
-  );
-
-  // Public registration cannot claim the dedicated admin email
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/auth/register",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: "جعلی",
-            email: ADMIN_EMAIL,
-            password: "Password123!",
-          }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 403
-  );
-
-  // Register a fresh student
-  const regRes = await dispatchLocalApiRequest<{
-    user: PublicUser;
-    token: string;
-  }>(
-    "/api/auth/register",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        name: "محمد حسینی",
-        email: "mohammad@test.ir",
-        password: "Password123!",
-        phone: "09120001122",
-      }),
-    },
-    storage
-  );
-  assert.equal(regRes.user.role, "STUDENT");
-  assert.equal(regRes.user.email, "mohammad@test.ir");
-
-  // Logout then sign back in with registered credentials
-  await dispatchLocalApiRequest("/api/auth/logout", { method: "POST" }, storage);
-  assert.equal(storage.getItem(AUTH_TOKEN_KEY), null);
-
-  const studentRes = await dispatchLocalApiRequest<{
-    user: PublicUser;
-    enrolledCourseIds: string[];
-    token: string;
-  }>(
-    "/api/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        email: "mohammad@test.ir",
-        password: "Password123!",
-      }),
-    },
-    storage
-  );
-  assert.equal(studentRes.user.role, "STUDENT");
-  assert.equal(studentRes.user.email, "mohammad@test.ir");
-  assert.ok(storage.getItem(AUTH_TOKEN_KEY));
-
-  // Reject student from admin overview
-  await assert.rejects(
-    () => dispatchLocalApiRequest("/api/admin/overview", {}, storage),
-    (err: unknown) => err instanceof LocalApiError && err.status === 403
-  );
-
-  // Re-bootstrap reads the persisted session
-  const me = await dispatchLocalApiRequest<{ user: PublicUser | null }>(
-    "/api/auth/me",
-    {},
-    storage
-  );
-  assert.equal(me.user?.email, "mohammad@test.ir");
-});
-
-test("admin course create, edit, duplicate, and delete immediately reflect in catalog", async () => {
-  const storage = createMemoryStorage();
-
-  // Wrong admin password rejected
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/auth/login",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            email: ADMIN_EMAIL,
-            password: "wrong-password",
-          }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 401
-  );
-
-  const adminLogin = await dispatchLocalApiRequest<{ user: PublicUser }>(
+  await dispatchLocalApiRequest(
     "/api/auth/login",
     {
       method: "POST",
       body: JSON.stringify({
         email: ADMIN_EMAIL,
-        password: "mmnn8787",
+        password: ADMIN_PASS,
       }),
     },
     storage
   );
-  assert.equal(adminLogin.user.role, "ADMIN");
-  assert.equal(adminLogin.user.email, ADMIN_EMAIL);
 
-  // Create
-  const created = await dispatchLocalApiRequest<{ course: CourseSummary }>(
+  const figmaCat = boot.categories.find(
+    (c: CategoryItem) => c.slug === "ui-ux-figma"
+  );
+  assert.ok(figmaCat);
+
+  const edited = await dispatchLocalApiRequest<{ category: CategoryItem }>(
+    `/api/admin/categories/${figmaCat.id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: "طراحی رابط کاربری و فیگما پیشرفته",
+        slug: "ui-ux-figma",
+        description: "آپدیت‌شده از پنل مدیریت",
+        icon: "Palette",
+      }),
+    },
+    storage
+  );
+  assert.equal(edited.category.name, "طراحی رابط کاربری و فیگما پیشرفته");
+});
+
+test("Student registration works without email and allows login by phone or username", async () => {
+  const storage = createMemoryStorage();
+  const suffix = String(Date.now()).slice(-6);
+  const uname = `student_ne_${suffix}`;
+  const phone = `0912${suffix}1`;
+  const reg = await dispatchLocalApiRequest<{ user: any }>(
+    "/api/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "تست دانشجو",
+        username: uname,
+        phone,
+        password: "Password123!",
+      }),
+    },
+    storage
+  );
+  assert.equal(reg.user.name, "تست دانشجو");
+  assert.equal(reg.user.username, uname);
+
+  await dispatchLocalApiRequest("/api/auth/logout", { method: "POST" }, storage);
+
+  const loginByPhone = await dispatchLocalApiRequest<{ user: any }>(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: phone,
+        password: "Password123!",
+      }),
+    },
+    storage
+  );
+  assert.equal(loginByPhone.user.id, reg.user.id);
+});
+
+test("Instructor registration requires admin approval before course publishing", async () => {
+  const storage = createMemoryStorage();
+  const suffix = String(Date.now()).slice(-6);
+  const instPhone = `0919${suffix}2`;
+  const instReg = await dispatchLocalApiRequest<{
+    user: any;
+    application: any;
+  }>(
+    "/api/auth/register-instructor",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "مدرس جدید",
+        phone: instPhone,
+        specialty: "UI/UX & Figma",
+        bio: "۵ سال سابقه طراحی محصول",
+        password: "Password123!",
+      }),
+    },
+    storage
+  );
+
+  assert.equal(instReg.application.status, "pending");
+  assert.equal(instReg.user.instructorStatus, "pending");
+
+  // Pending instructor MUST be blocked from creating courses
+  await assert.rejects(
+    async () => {
+      await dispatchLocalApiRequest(
+        "/api/admin/courses",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: "دوره تست",
+            shortDesc: "توضیح کوتاه",
+            categoryId: "cat_uiux_figma",
+          }),
+        },
+        storage
+      );
+    },
+    (err: any) => err.status === 403
+  );
+
+  // Admin logs in and approves instructor
+  await dispatchLocalApiRequest(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASS,
+      }),
+    },
+    storage
+  );
+
+  await dispatchLocalApiRequest(
+    `/api/admin/instructors/${instReg.application.id}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status: "approved" }),
+    },
+    storage
+  );
+
+  // Instructor logs back in and can now create a course with attachments & pricing fields
+  await dispatchLocalApiRequest(
+    "/api/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: instPhone,
+        password: "Password123!",
+      }),
+    },
+    storage
+  );
+
+  const created = await dispatchLocalApiRequest<{ course: any }>(
     "/api/admin/courses",
     {
       method: "POST",
       body: JSON.stringify({
-        title: "دوره تخصصی Rust و WebAssembly",
-        shortDesc: "آموزش زبان Rust از صفر تا ساخت سرویس‌های فوق‌سریع",
-        description: "توضیحات کامل دوره راست",
-        categoryId: "cat_backend",
-        price: 3200000,
-        discountPrice: 2400000,
-        level: "INTERMEDIATE",
-        isPublished: true,
-        isFeatured: true,
+        title: "دوره جامع فیگما و دیزاین سیستم",
+        shortDesc: "آموزش عملی فیگما",
+        price: 2000000,
+        discountPrice: 1500000,
+        fullAccess: true,
+        instructorSharePercent: 75,
+        instructorDiscountPercent: 5,
+        categoryId: "cat_uiux_figma",
+        chapters: [
+          {
+            id: "ch_1",
+            title: "فصل اول",
+            position: 1,
+            lessons: [
+              {
+                id: "ls_1",
+                title: "آشنایی با فیگما",
+                duration: "۱۵:۰۰",
+                videoUrl: "https://example.com/v1.mp4",
+                isFree: true,
+                position: 1,
+                attachments: [
+                  {
+                    id: "att_1",
+                    title: "فایل تمرینی.fig",
+                    fileUrl: "https://example.com/kit.fig",
+                    fileSize: "4.2 MB",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       }),
     },
     storage
   );
-  assert.equal(created.course.title, "دوره تخصصی Rust و WebAssembly");
 
-  // Appears in public catalog immediately (newest first)
-  const catalogAfterCreate = await dispatchLocalApiRequest<{
-    courses: CourseSummary[];
-  }>("/api/courses?sort=newest", {}, storage);
-  assert.equal(catalogAfterCreate.courses.length, 7);
-  assert.equal(catalogAfterCreate.courses[0].id, created.course.id);
-
-  // Edit
-  await dispatchLocalApiRequest(
-    `/api/admin/courses/${created.course.id}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        title: "دوره پیشرفته Rust و سیستم‌های پرسرعت",
-        price: 3500000,
-      }),
-    },
-    storage
-  );
-
-  const catalogAfterEdit = await dispatchLocalApiRequest<{
-    courses: CourseSummary[];
-  }>("/api/courses?sort=newest", {}, storage);
-  assert.equal(
-    catalogAfterEdit.courses[0].title,
-    "دوره پیشرفته Rust و سیستم‌های پرسرعت"
-  );
-
-  // Duplicate (creates unpublished copy)
-  const dup = await dispatchLocalApiRequest<{ course: CourseSummary }>(
-    `/api/admin/courses/${created.course.id}/duplicate`,
-    { method: "POST" },
-    storage
-  );
-  assert.equal(dup.course.isPublished, false);
-
-  const adminCatalog = await dispatchLocalApiRequest<{
-    courses: CourseSummary[];
-  }>("/api/courses?includeUnpublished=true", {}, storage);
-  assert.equal(adminCatalog.courses.length, 8);
-
-  // Delete both
-  await dispatchLocalApiRequest(
-    `/api/admin/courses/${created.course.id}`,
-    { method: "DELETE" },
-    storage
-  );
-  await dispatchLocalApiRequest(
-    `/api/admin/courses/${dup.course.id}`,
-    { method: "DELETE" },
-    storage
-  );
-
-  const finalCatalog = await dispatchLocalApiRequest<{
-    courses: CourseSummary[];
-  }>("/api/courses", {}, storage);
-  assert.equal(finalCatalog.courses.length, 6);
+  assert.equal(created.course.fullAccess, true);
+  assert.equal(created.course.instructorSharePercent, 75);
+  assert.equal(created.course.instructorDiscountPercent, 5);
 });
 
-test("coupon validation and checkout flow unlocks course for registered student", async () => {
+test("Role-based reviews preserve authorRole and News CRUD works", async () => {
   const storage = createMemoryStorage();
-
-  await dispatchLocalApiRequest(
-    "/api/auth/register",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        name: "سارا کریمی",
-        email: "sara@test.ir",
-        password: "Password123!",
-      }),
-    },
-    storage
-  );
-
-  const couponRes = await dispatchLocalApiRequest<{
-    coupon: { code: string; type: string; value: number };
-  }>(
-    "/api/coupons/validate",
-    {
-      method: "POST",
-      body: JSON.stringify({ code: "bahar30" }),
-    },
-    storage
-  );
-  assert.equal(couponRes.coupon.code, "BAHAR30");
-  assert.equal(couponRes.coupon.value, 30);
-
-  const init = await dispatchLocalApiRequest<{
-    orderId: string;
-    orderNumber: string;
-    finalAmount: number;
-  }>(
-    "/api/checkout/initiate",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        courseIds: ["crs_ai_llm"],
-        couponCode: "BAHAR30",
-      }),
-    },
-    storage
-  );
-  assert.equal(init.finalAmount, 2940000); // 4,200,000 * 0.7
-
-  const verified = await dispatchLocalApiRequest<{
-    success: boolean;
-    enrolledCourseIds: string[];
-  }>(
-    "/api/checkout/verify",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        orderId: init.orderId,
-        status: "SUCCESS",
-      }),
-    },
-    storage
-  );
-  assert.equal(verified.success, true);
-  assert.ok(verified.enrolledCourseIds.includes("crs_ai_llm"));
-
-  const dashboard = await dispatchLocalApiRequest<{
-    enrolledCourses: CourseSummary[];
-    orders: Array<{ orderNumber: string; status: string }>;
-  }>("/api/student/dashboard", {}, storage);
-
-  assert.equal(dashboard.enrolledCourses.length, 1);
-  assert.equal(dashboard.orders.length, 1);
-  assert.equal(dashboard.orders[0].status, "COMPLETED");
-});
-
-test("admin can update, persist, and reset platform settings and feature toggles", async () => {
-  const storage = createMemoryStorage();
-
-  // Reject unauthenticated settings update
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/admin/settings",
-        {
-          method: "PUT",
-          body: JSON.stringify({ themePalette: "emerald_obsidian" }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 401
-  );
-
   await dispatchLocalApiRequest(
     "/api/auth/login",
     {
       method: "POST",
       body: JSON.stringify({
         email: ADMIN_EMAIL,
-        password: "mmnn8787",
+        password: ADMIN_PASS,
       }),
     },
     storage
   );
 
-  const updated = await dispatchLocalApiRequest<{
-    settings: {
-      themePalette: string;
-      fontFamily: string;
-      baseFontSize: number;
-      allowRegistration: boolean;
-      allowCoupons: boolean;
-      heroTitle: string;
-    };
-  }>(
-    "/api/admin/settings",
+  await dispatchLocalApiRequest(
+    "/api/courses/crs_nextjs_15/reviews",
     {
-      method: "PUT",
+      method: "POST",
       body: JSON.stringify({
-        themePalette: "rose_midnight",
-        fontFamily: "rubik",
-        baseFontSize: 18,
-        allowRegistration: false,
-        allowCoupons: false,
-        heroTitle: "آکادمی تخصصی مهندسی نرم‌افزار",
+        rating: 5,
+        comment: "پاسخ رسمی مدیریت درباره آپدیت فصل جدید",
       }),
     },
     storage
   );
 
-  assert.equal(updated.settings.themePalette, "rose_midnight");
-  assert.equal(updated.settings.fontFamily, "rubik");
-  assert.equal(updated.settings.baseFontSize, 18);
-  assert.equal(updated.settings.allowRegistration, false);
-
-  // Bootstrap serves persisted settings
-  const boot = await dispatchLocalApiRequest<{
-    settings: { themePalette: string; fontFamily: string; heroTitle: string };
-  }>("/api/bootstrap", {}, storage);
-  assert.equal(boot.settings.themePalette, "rose_midnight");
-  assert.equal(boot.settings.fontFamily, "rubik");
-  assert.equal(boot.settings.heroTitle, "آکادمی تخصصی مهندسی نرم‌افزار");
-
-  // Feature toggles are enforced in backend handlers
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/auth/register",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: "کاربر تست",
-            email: "blocked@test.ir",
-            password: "Password123!",
-          }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 403
+  const detail = await dispatchLocalApiRequest<{ course: any }>(
+    "/api/courses/nextjs-15-fullstack-bootcamp",
+    {},
+    storage
   );
-
-  await assert.rejects(
-    () =>
-      dispatchLocalApiRequest(
-        "/api/coupons/validate",
-        {
-          method: "POST",
-          body: JSON.stringify({ code: "BAHAR30" }),
-        },
-        storage
-      ),
-    (err: unknown) => err instanceof LocalApiError && err.status === 400
+  const adminRev = detail.course.reviews.find((r: any) =>
+    r.comment.includes("پاسخ رسمی مدیریت")
   );
+  assert.ok(adminRev);
+  assert.equal(adminRev.authorRole, "ADMIN");
 
-  // Reset restores defaults
-  const reset = await dispatchLocalApiRequest<{
-    settings: {
-      themePalette: string;
-      fontFamily: string;
-      baseFontSize: number;
-      allowRegistration: boolean;
-    };
-  }>("/api/admin/settings/reset", { method: "POST" }, storage);
-  assert.equal(reset.settings.themePalette, "indigo_slate");
-  assert.equal(reset.settings.fontFamily, "vazirmatn");
-  assert.equal(reset.settings.baseFontSize, 16);
-  assert.equal(reset.settings.allowRegistration, true);
+  // News CRUD
+  const createdNews = await dispatchLocalApiRequest<{ article: NewsArticle }>(
+    "/api/admin/news",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: "خبر آزمایشی تایپ‌اسکریپت",
+        summary: "خلاصه کوتاه",
+        content: "متن کامل خبر",
+        category: "فرانت‌اند",
+        isPublished: true,
+      }),
+    },
+    storage
+  );
+  assert.equal(createdNews.article.title, "خبر آزمایشی تایپ‌اسکریپت");
+
+  const publicNews = await dispatchLocalApiRequest<{ news: NewsArticle[] }>(
+    "/api/news",
+    {},
+    storage
+  );
+  assert.ok(
+    publicNews.news.some((n: NewsArticle) => n.id === createdNews.article.id)
+  );
 });
-

@@ -491,3 +491,310 @@ export async function updateSupabaseOrderStatus(
     };
   }
 }
+
+// --- REVIEWS (public.reviews) ---
+export interface SupabaseReviewRow {
+  id: string;
+  course_id: string;
+  user_id: string;
+  user_name: string;
+  author_role: string;
+  rating: number;
+  comment: string;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchSupabaseReviewsByCourse(
+  courseId: string
+): Promise<SupabaseResult<SupabaseReviewRow[]>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("reviews")
+      .select(
+        "id, course_id, user_id, user_name, author_role, rating, comment, status, created_at"
+      )
+      .eq("course_id", courseId)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseReviewRow[] | null) ?? [] };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase fetch failed",
+    };
+  }
+}
+
+export async function fetchAllSupabaseReviews(): Promise<
+  SupabaseResult<SupabaseReviewRow[]>
+> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("reviews")
+      .select(
+        "id, course_id, user_id, user_name, author_role, rating, comment, status, created_at"
+      )
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseReviewRow[] | null) ?? [] };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase fetch failed",
+    };
+  }
+}
+
+export async function insertSupabaseReview(
+  row: SupabaseReviewRow
+): Promise<SupabaseResult<SupabaseReviewRow>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("reviews")
+      .insert(row)
+      .select(
+        "id, course_id, user_id, user_name, author_role, rating, comment, status, created_at"
+      )
+      .single();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseReviewRow) ?? row };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase insert failed",
+    };
+  }
+}
+
+export async function updateSupabaseReviewStatus(
+  id: string,
+  status: string
+): Promise<SupabaseResult<SupabaseReviewRow | null>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("reviews")
+      .update({ status })
+      .eq("id", id)
+      .select(
+        "id, course_id, user_id, user_name, author_role, rating, comment, status, created_at"
+      )
+      .maybeSingle();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseReviewRow | null) ?? null };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase update failed",
+    };
+  }
+}
+
+export async function deleteSupabaseReview(
+  id: string
+): Promise<SupabaseResult<boolean>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { error } = await client.from("reviews").delete().eq("id", id);
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase delete failed",
+    };
+  }
+}
+
+// --- INSTRUCTORS (public.instructors) ---
+export interface SupabaseInstructorRow {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  specialty: string;
+  bio: string;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchAllSupabaseInstructors(): Promise<
+  SupabaseResult<SupabaseInstructorRow[]>
+> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("instructors")
+      .select(
+        "id, user_id, name, email, phone, specialty, bio, status, created_at"
+      )
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseInstructorRow[] | null) ?? [] };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase fetch failed",
+    };
+  }
+}
+
+export async function insertSupabaseInstructor(
+  row: SupabaseInstructorRow
+): Promise<SupabaseResult<SupabaseInstructorRow>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("instructors")
+      .insert(row)
+      .select(
+        "id, user_id, name, email, phone, specialty, bio, status, created_at"
+      )
+      .single();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseInstructorRow) ?? row };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase insert failed",
+    };
+  }
+}
+
+export async function updateSupabaseInstructorStatus(
+  id: string,
+  status: string
+): Promise<SupabaseResult<SupabaseInstructorRow | null>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("instructors")
+      .update({ status })
+      .eq("id", id)
+      .select(
+        "id, user_id, name, email, phone, specialty, bio, status, created_at"
+      )
+      .maybeSingle();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseInstructorRow | null) ?? null };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase update failed",
+    };
+  }
+}
+
+// --- NEWS (public.news) ---
+export interface SupabaseNewsRow {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  content: string;
+  category: string;
+  image_url: string;
+  author_name: string;
+  is_published: boolean;
+  created_at: string;
+}
+
+export async function fetchAllSupabaseNews(): Promise<
+  SupabaseResult<SupabaseNewsRow[]>
+> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("news")
+      .select(
+        "id, title, slug, summary, content, category, image_url, author_name, is_published, created_at"
+      )
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseNewsRow[] | null) ?? [] };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase fetch failed",
+    };
+  }
+}
+
+export async function insertSupabaseNews(
+  row: SupabaseNewsRow
+): Promise<SupabaseResult<SupabaseNewsRow>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("news")
+      .insert(row)
+      .select(
+        "id, title, slug, summary, content, category, image_url, author_name, is_published, created_at"
+      )
+      .single();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseNewsRow) ?? row };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase insert failed",
+    };
+  }
+}
+
+export async function updateSupabaseNews(
+  id: string,
+  patch: Partial<Omit<SupabaseNewsRow, "id" | "created_at">>
+): Promise<SupabaseResult<SupabaseNewsRow | null>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { data, error } = await client
+      .from("news")
+      .update(patch)
+      .eq("id", id)
+      .select(
+        "id, title, slug, summary, content, category, image_url, author_name, is_published, created_at"
+      )
+      .maybeSingle();
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: (data as SupabaseNewsRow | null) ?? null };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase update failed",
+    };
+  }
+}
+
+export async function deleteSupabaseNews(
+  id: string
+): Promise<SupabaseResult<boolean>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+  try {
+    const { error } = await client.from("news").delete().eq("id", id);
+    if (error) return { ok: false, code: error.code, message: error.message };
+    return { ok: true, data: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase delete failed",
+    };
+  }
+}

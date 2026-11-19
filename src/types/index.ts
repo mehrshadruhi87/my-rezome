@@ -11,10 +11,13 @@ export type OrderStatus =
   | "REFUNDED"
   | "CANCELLED";
 
+export type InstructorStatus = "pending" | "approved" | "rejected";
+
 export interface PublicUser {
   id: string;
   name: string;
   email: string;
+  username?: string | null;
   role: UserRole;
   phone: string | null;
   bio: string | null;
@@ -22,6 +25,7 @@ export interface PublicUser {
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
   isActive?: boolean;
+  instructorStatus?: InstructorStatus | null;
   createdAt: string;
 }
 
@@ -36,12 +40,12 @@ export interface CategoryItem {
 
 export interface LessonAttachmentItem {
   id: string;
-  lessonId: string;
+  lessonId?: string;
   title: string;
   fileUrl: string;
   fileType: string;
-  fileSize: number;
-  createdAt: string;
+  fileSize?: number | string;
+  createdAt?: string;
 }
 
 export interface LessonItem {
@@ -70,6 +74,7 @@ export interface ReviewItem {
   status?: "PENDING" | "APPROVED" | "REJECTED";
   userId: string;
   userName: string;
+  authorRole?: UserRole;
   courseId: string;
   courseTitle?: string;
   createdAt: string;
@@ -83,6 +88,9 @@ export interface CourseSummary {
   thumbnail: string;
   price: number;
   discountPrice: number | null;
+  fullAccess?: boolean;
+  instructorSharePercent?: number;
+  instructorDiscountPercent?: number;
   level: CourseLevel;
   duration: string;
   instructorId?: string | null;
@@ -110,6 +118,31 @@ export interface CourseDetail extends CourseSummary {
   chapters: ChapterItem[];
   reviews: ReviewItem[];
   isEnrolled?: boolean;
+}
+
+export interface InstructorApplication {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  specialty: string;
+  bio: string;
+  status: InstructorStatus;
+  createdAt: string;
+}
+
+export interface NewsArticle {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  content: string;
+  category: string;
+  imageUrl: string;
+  authorName: string;
+  isPublished: boolean;
+  createdAt: string;
 }
 
 export interface DiscountCodeItem {

@@ -6,9 +6,7 @@ import { calculateCartTotals, type CartTotals } from "../utils/pricing";
 interface StoreState {
   cart: CartCourseItem[];
   wishlist: CartCourseItem[];
-  isCartDrawerOpen: boolean;
   coupon: AppliedCoupon | null;
-  setCartDrawerOpen: (open: boolean) => void;
   addToCart: (item: CartCourseItem) => boolean;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
@@ -22,10 +20,7 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
       cart: [],
       wishlist: [],
-      isCartDrawerOpen: false,
       coupon: null,
-
-      setCartDrawerOpen: (open) => set({ isCartDrawerOpen: open }),
 
       addToCart: (item) => {
         const exists = get().cart.some((c) => c.id === item.id);

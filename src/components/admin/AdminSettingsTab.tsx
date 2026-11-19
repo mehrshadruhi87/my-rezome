@@ -40,15 +40,15 @@ function ToggleRow({
   onChange,
 }: ToggleRowProps) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/60 p-3.5">
       <div className="min-w-0">
         <label
           htmlFor={id}
-          className="block text-xs font-bold text-white cursor-pointer"
+          className="block text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
         >
           {label}
         </label>
-        <p className="mt-0.5 text-[11px] text-slate-400">{description}</p>
+        <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">{description}</p>
       </div>
       <button
         id={id}
@@ -59,7 +59,7 @@ function ToggleRow({
         className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition-colors px-1 ${
           checked
             ? "border-indigo-500 bg-indigo-600 justify-end"
-            : "border-slate-700 bg-slate-800 justify-start"
+            : "border-slate-400 dark:border-slate-700 bg-slate-300 dark:bg-slate-800 justify-start"
         }`}
       >
         <span className="sr-only">{label}</span>
@@ -161,12 +161,12 @@ export function AdminSettingsTab() {
   return (
     <form onSubmit={handleSave} className="space-y-8">
       {/* Top Status & Save Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/80 p-5">
         <div>
-          <h2 className="text-base font-black text-white">
+          <h2 className="text-base font-black text-slate-900 dark:text-white">
             تنظیمات جامع پلتفرم کدآکادمی
           </h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
             تم رنگی، فونت و اندازه‌ها، متن‌های صفحه اصلی و امکانات پلتفرم را با پیش‌نمایش زنده مدیریت کنید.
           </p>
         </div>
@@ -176,7 +176,7 @@ export function AdminSettingsTab() {
             <button
               type="button"
               onClick={handleDiscard}
-              className="rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-bold text-slate-300 hover:text-white transition-colors whitespace-nowrap"
+              className="rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950 px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition-colors whitespace-nowrap"
             >
               لغو تغییرات
             </button>
@@ -185,7 +185,7 @@ export function AdminSettingsTab() {
             type="button"
             disabled={resetting || saving}
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-bold text-slate-300 hover:border-rose-500/50 hover:text-rose-300 transition-colors disabled:opacity-50 whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950 px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-rose-500/50 hover:text-rose-600 dark:hover:text-rose-300 transition-colors disabled:opacity-50 whitespace-nowrap"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             <span>بازگردانی پیش‌فرض</span>
@@ -193,7 +193,7 @@ export function AdminSettingsTab() {
           <button
             type="submit"
             disabled={saving || resetting}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 whitespace-nowrap"
+            className="btn-3d inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 whitespace-nowrap"
           >
             <Save className="h-3.5 w-3.5" />
             <span>{saving ? "در حال ذخیره..." : "ذخیره تنظیمات"}</span>
@@ -202,23 +202,23 @@ export function AdminSettingsTab() {
       </div>
 
       {/* SECTION 1: 5 COLOR PALETTES */}
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-5">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-4">
+      <section className="rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 p-6 space-y-5">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-300 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-400">
               <Palette className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-white">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
                 پالت رنگی سایت (۵ تم اختصاصی)
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 با انتخاب هر پالت، رنگ پس‌زمینه، کارت‌ها، دکمه‌ها و لینک‌های کل سایت بلافاصله تغییر می‌کند.
               </p>
             </div>
           </div>
           {isDirty && (
-            <span className="text-[11px] font-bold text-amber-400 shrink-0">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 shrink-0">
               پیش‌نمایش زنده فعال
             </span>
           )}

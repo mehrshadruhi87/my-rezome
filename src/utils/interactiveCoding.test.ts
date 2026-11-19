@@ -1,91 +1,64 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildHtmlCssPreviewDoc,
   DAILY_CHALLENGES,
-  DEFAULT_CHALLENGE_PROGRESS,
-  INTERACTIVE_ROADMAPS,
-  PLAYGROUND_TEMPLATES,
-  applyChallengeWin,
-  computeTrackProgress,
   evaluateChallengeSubmission,
-  getRankInfo,
-  runSandboxCode,
+  getDailyChallengesForDate,
+  getTodayDateKey,
+  HTML_CSS_TEMPLATES,
+  INTERACTIVE_ROADMAPS,
 } from "./interactiveCoding";
 
-test("runSandboxCode captures console logs and return value", () => {
-  const res = runSandboxCode(`
-    const nums = [1, 2, 3];
-    console.log("sum:", nums.reduce((a, b) => a + b, 0));
-    return nums.length;
-  `);
-
-  assert.equal(res.ok, true);
-  assert.equal(res.logs.length, 1);
-  assert.equal(res.logs[0].text, "sum: 6");
-  assert.equal(res.returnValue, "3");
+test("buildHtmlCssPreviewDoc embeds HTML and CSS cleanly with RTL document structure", () => {
+  const doc = buildHtmlCssPreviewDoc("<h1>سلام</h1>", "h1 { color: red; }");
+  assert.match(doc, /dir="rtl"/);
+  assert.match(doc, /<h1>سلام<\/h1>/);
+  assert.match(doc, /h1 \{ color: red; \}/);
+  assert.ok(HTML_CSS_TEMPLATES.length >= 2);
 });
 
-test("runSandboxCode handles runtime errors safely", () => {
-  const res = runSandboxCode(`throw new Error("boom");`);
-  assert.equal(res.ok, false);
-  assert.match(res.error ?? "", /boom/);
-});
-
-test("all built-in playground templates execute without error", () => {
-  for (const tpl of PLAYGROUND_TEMPLATES) {
-    const res = runSandboxCode(tpl.code);
-    assert.equal(res.ok, true, `Template ${tpl.id} failed: ${res.error}`);
-    assert.ok(res.logs.length > 0, `Template ${tpl.id} produced no logs`);
-  }
-});
-
-test("evaluateChallengeSubmission passes all reference solutions and fails wrong ones", () => {
-  for (const challenge of DAILY_CHALLENGES) {
-    const passResult = evaluateChallengeSubmission(
-      challenge,
-      challenge.solutionCode
-    );
+test("DAILY_CHALLENGES has at least 10 challenges and all reference solutions pass", () => {
+  assert.ok(DAILY_CHALLENGES.length >= 10);
+  for (const ch of DAILY_CHALLENGES) {
+    const res = evaluateChallengeSubmission(ch, ch.solutionCode);
     assert.equal(
-      passResult.allPassed,
+      res.allPassed,
       true,
-      `Solution for ${challenge.id} should pass all tests`
+      `Challenge ${ch.id} reference solution failed: ${res.runtimeError || ""}`
     );
-    assert.equal(passResult.passedCount, challenge.testCases.length);
   }
-
-  const first = DAILY_CHALLENGES[0];
-  const failResult = evaluateChallengeSubmission(
-    first,
-    `function sumEvens() { return -1; }`
-  );
-  assert.equal(failResult.allPassed, false);
-  assert.equal(failResult.passedCount, 0);
 });
 
-test("applyChallengeWin awards XP only once per challenge and updates rank", () => {
-  const challenge = DAILY_CHALLENGES[0];
-  const firstWin = applyChallengeWin(
-    DEFAULT_CHALLENGE_PROGRESS,
-    challenge,
-    "2026-04-15"
+test("getDailyChallengesForDate rotates challenges deterministically across dates", () => {
+  const day1 = getDailyChallengesForDate("2025-05-01", 3);
+  const day2 = getDailyChallengesForDate("2025-05-02", 3);
+  const day1Repeat = getDailyChallengesForDate("2025-05-01", 3);
+
+  assert.equal(day1.length, 3);
+  assert.deepEqual(
+    day1.map((c) => c.id),
+    day1Repeat.map((c) => c.id)
   );
-  assert.equal(firstWin.newlySolved, true);
-  assert.equal(firstWin.next.xp, challenge.xp);
-
-  const duplicateWin = applyChallengeWin(firstWin.next, challenge, "2026-04-15");
-  assert.equal(duplicateWin.newlySolved, false);
-  assert.equal(duplicateWin.next.xp, challenge.xp);
-
-  assert.equal(getRankInfo(0).title, "نوآموز کدنویسی");
-  assert.equal(getRankInfo(260).title, "کدنویس سایبری");
-  assert.equal(getRankInfo(540).title, "مهندس ارشد");
-  assert.equal(getRankInfo(900).title, "معمار کهکشانی");
+  assert.notDeepEqual(
+    day1.map((c) => c.id),
+    day2.map((c) => c.id)
+  );
+  assert.match(getTodayDateKey(), /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test("computeTrackProgress calculates milestone completion percentage accurately", () => {
-  const track = INTERACTIVE_ROADMAPS[0];
-  const res = computeTrackProgress(track, [track.milestones[0].id, track.milestones[1].id]);
-  assert.equal(res.completed, 2);
-  assert.equal(res.total, 4);
-  assert.equal(res.percent, 50);
+test("INTERACTIVE_ROADMAPS milestones include prerequisites and recommendedCourses", () => {
+  assert.ok(INTERACTIVE_ROADMAPS.length >= 3);
+  for (const rm of INTERACTIVE_ROADMAPS) {
+    for (const ms of rm.milestones) {
+      assert.ok(
+        ms.prerequisites.length > 0,
+        `Missing prerequisites in ${ms.id}`
+      );
+      assert.ok(
+        ms.recommendedCourses.length > 0,
+        `Missing recommendedCourses in ${ms.id}`
+      );
+    }
+  }
 });

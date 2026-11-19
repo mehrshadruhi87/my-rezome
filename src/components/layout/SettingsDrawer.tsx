@@ -15,10 +15,12 @@ import {
   Gauge,
   Home,
   Moon,
+  Newspaper,
   Palette,
   RotateCcw,
   Search,
   ShieldAlert,
+  ShoppingBag,
   SlidersHorizontal,
   Sun,
   Terminal,
@@ -97,10 +99,10 @@ export function SettingsDrawer({
               ease: [0.22, 1, 0.36, 1],
               duration: motionDuration(0.28),
             }}
-            className="relative z-10 flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-slate-200 dark:border-slate-800/90 bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl"
+            className="relative z-10 flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-slate-300 dark:border-slate-800/90 bg-[#F1F5F9]/98 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl"
           >
             {/* Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 px-5 py-4 backdrop-blur-xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-300 dark:border-slate-800 bg-[#E9EFF6]/95 dark:bg-slate-950/90 px-5 py-4 backdrop-blur-xl">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--accent-600)] text-white shadow-lg shadow-[var(--accent-500)]/25">
                   <SlidersHorizontal className="h-4 w-4" />
@@ -108,11 +110,11 @@ export function SettingsDrawer({
                 <div>
                   <h2 className="text-sm font-black text-slate-900 dark:text-white">
                     {settings.brandPrimaryText}
-                    <span className="text-[var(--accent-500)] dark:text-[var(--accent-400)]">
+                    <span className="text-[var(--accent-600)] dark:text-[var(--accent-400)]">
                       {settings.brandAccentText}
                     </span>
                   </h2>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
                     منو و مینی تنظیمات زنده
                   </p>
                 </div>
@@ -121,7 +123,7 @@ export function SettingsDrawer({
                 type="button"
                 onClick={onClose}
                 aria-label="بستن منوی تنظیمات"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -137,16 +139,16 @@ export function SettingsDrawer({
                     value={searchQuery}
                     onChange={(e) => onSearchQueryChange(e.target.value)}
                     placeholder="جستجوی دوره یا تکنولوژی..."
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 py-2.5 pr-9 pl-4 text-xs text-slate-900 dark:text-white placeholder-slate-500 focus:border-[var(--accent-500)] focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#E2E8F0] dark:bg-slate-900 py-2.5 pr-9 pl-4 text-xs text-slate-900 dark:text-white placeholder-slate-500 focus:border-[var(--accent-500)] focus:outline-none"
                   />
-                  <Search className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Search className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
                 </div>
               </form>
 
               {/* MINI LIVE SETTINGS PANEL */}
               <section
                 aria-label="مینی تنظیمات زنده"
-                className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-slate-50/90 dark:bg-slate-900/70 p-4 space-y-5"
+                className="rounded-2xl border border-slate-300/90 dark:border-slate-800/90 bg-[#E9EFF6] dark:bg-slate-900/70 p-4 space-y-5"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -158,7 +160,7 @@ export function SettingsDrawer({
                   <button
                     type="button"
                     onClick={resetPreferences}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-300/70 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white transition-colors"
                   >
                     <RotateCcw className="h-3 w-3" />
                     <span>پیش‌فرض</span>
@@ -168,14 +170,14 @@ export function SettingsDrawer({
                 {/* 1. Dark / Light Mode */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                    <span className="font-bold text-slate-800 dark:text-slate-300">
                       حالت نمایش
                     </span>
-                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      {prefs.mode === "dark" ? "تاریک (سایبر)" : "روشن (مینیمال)"}
+                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                      {prefs.mode === "dark" ? "تاریک (سایبر)" : "روشن (ملایم)"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-200/70 dark:bg-slate-950/90 p-1">
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-300/70 dark:bg-slate-950/90 p-1">
                     <button
                       type="button"
                       onClick={() => setMode("dark")}
@@ -184,7 +186,7 @@ export function SettingsDrawer({
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all ${
                         prefs.mode === "dark"
                           ? "bg-[var(--accent-600)] text-white shadow-md shadow-[var(--accent-500)]/30"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                          : "text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
                       }`}
                     >
                       <Moon className="h-3.5 w-3.5" />
@@ -198,7 +200,7 @@ export function SettingsDrawer({
                       className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all ${
                         prefs.mode === "light"
                           ? "bg-[var(--accent-600)] text-white shadow-md shadow-[var(--accent-500)]/30"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                          : "text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
                       }`}
                     >
                       <Sun className="h-3.5 w-3.5" />
@@ -209,7 +211,7 @@ export function SettingsDrawer({
 
                 {/* 2. Primary Accent Color */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-300">
                     <Palette className="h-3.5 w-3.5 text-[var(--accent-500)]" />
                     <span>رنگ اصلی تم</span>
                   </div>
@@ -225,8 +227,8 @@ export function SettingsDrawer({
                           data-testid={`accent-${item.id}`}
                           className={`flex items-center justify-between rounded-xl border px-3 py-2.5 text-right transition-all ${
                             active
-                              ? "border-[var(--accent-500)] bg-[var(--accent-500)]/10 text-slate-900 dark:text-white shadow-sm"
-                              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
+                              ? "border-[var(--accent-500)] bg-[var(--accent-500)]/12 text-slate-900 dark:text-white shadow-sm"
+                              : "border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/70 text-slate-800 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-700"
                           }`}
                         >
                           <div className="flex items-center gap-2.5">
@@ -240,7 +242,7 @@ export function SettingsDrawer({
                               <div className="text-xs font-bold">
                                 {item.label}
                               </div>
-                              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                              <div className="text-[10px] text-slate-600 dark:text-slate-400">
                                 {item.subtitle}
                               </div>
                             </div>
@@ -261,7 +263,7 @@ export function SettingsDrawer({
                   <div className="flex items-center justify-between text-xs">
                     <label
                       htmlFor="drawer-font-size-slider"
-                      className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300"
+                      className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-300"
                     >
                       <Type className="h-3.5 w-3.5 text-[var(--accent-500)]" />
                       <span>اندازه فونت</span>
@@ -291,8 +293,8 @@ export function SettingsDrawer({
                         onClick={() => setFontSize(preset.value)}
                         className={`rounded-lg border py-1.5 text-[11px] font-bold tabular-nums transition-colors ${
                           prefs.fontSize === preset.value
-                            ? "border-[var(--accent-500)] bg-[var(--accent-500)]/15 text-[var(--accent-600)] dark:text-[var(--accent-300)]"
-                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                            ? "border-[var(--accent-500)] bg-[var(--accent-500)]/15 text-[var(--accent-700)] dark:text-[var(--accent-300)]"
+                            : "border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/60 text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
                         }`}
                       >
                         {preset.label} ({toPersianDigits(preset.value)})
@@ -303,7 +305,7 @@ export function SettingsDrawer({
 
                 {/* 4. Animation Speed */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-300">
                     <Gauge className="h-3.5 w-3.5 text-[var(--accent-500)]" />
                     <span>سرعت انیمیشن‌ها</span>
                   </div>
@@ -320,7 +322,7 @@ export function SettingsDrawer({
                           className={`rounded-lg border py-1.5 text-[11px] font-bold transition-all ${
                             active
                               ? "border-[var(--accent-500)] bg-[var(--accent-600)] text-white shadow-sm"
-                              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                              : "border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/60 text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
                           }`}
                         >
                           {opt.label}
@@ -333,26 +335,36 @@ export function SettingsDrawer({
 
               {/* Quick Navigation Links */}
               <nav aria-label="ناوبری سریع منو" className="space-y-1.5">
-                <div className="px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                <div className="px-1 text-[11px] font-bold text-slate-600 dark:text-slate-400">
                   دسترسی سریع به بخش‌ها
                 </div>
                 {[
                   { href: "/", label: "صفحه اصلی", icon: Home },
                   { href: "/courses", label: "کاتالوگ دوره‌ها", icon: BookOpen },
                   {
-                    href: "/#roadmaps",
+                    href: "/cart",
+                    label: "سبد خرید و علاقه‌مندی‌ها",
+                    icon: ShoppingBag,
+                  },
+                  {
+                    href: "/roadmaps",
                     label: "نقشه‌های راه تعاملی",
                     icon: Compass,
                   },
                   {
-                    href: "/#playground",
+                    href: "/code-lab",
                     label: "آزمایشگاه اجرای زنده کد",
                     icon: Terminal,
                   },
                   {
-                    href: "/#challenges",
+                    href: "/challenges",
                     label: "چالش‌های روزانه و امتیازدهی",
                     icon: Trophy,
+                  },
+                  {
+                    href: "/news",
+                    label: "اخبار برنامه‌نویسی و تکنولوژی",
+                    icon: Newspaper,
                   },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -361,29 +373,33 @@ export function SettingsDrawer({
                       key={item.href}
                       href={item.href}
                       onClick={onClose}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-200/80 dark:hover:bg-slate-900 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
                     >
                       <Icon className="h-4 w-4 text-[var(--accent-500)]" />
                       <span>{item.label}</span>
                     </Link>
                   );
                 })}
-                {user?.role === "ADMIN" && (
+                {(user?.role === "ADMIN" || user?.role === "INSTRUCTOR") && (
                   <Link
                     href="/admin"
                     onClick={onClose}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                   >
                     <ShieldAlert className="h-4 w-4" />
-                    <span>ورود به پنل مدیریت</span>
+                    <span>
+                      {user.role === "ADMIN"
+                        ? "ورود به پنل مدیریت"
+                        : "ورود به پنل مدرس"}
+                    </span>
                   </Link>
                 )}
               </nav>
 
               {/* Categories Quick Chips */}
               {categories.length > 0 && (
-                <div className="space-y-2 border-t border-slate-200 dark:border-slate-800 pt-4">
-                  <div className="px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                <div className="space-y-2 border-t border-slate-300 dark:border-slate-800 pt-4">
+                  <div className="px-1 text-[11px] font-bold text-slate-600 dark:text-slate-400">
                     دپارتمان‌های تخصصی
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -392,7 +408,7 @@ export function SettingsDrawer({
                         key={cat.id}
                         href={`/courses?category=${cat.slug}`}
                         onClick={onClose}
-                        className="truncate rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
+                        className="truncate rounded-xl border border-slate-300/80 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
                       >
                         {cat.name}
                       </Link>

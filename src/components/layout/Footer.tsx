@@ -16,8 +16,8 @@ export function Footer() {
   const { settings } = useAuth();
 
   return (
-    <footer className="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 transition-colors">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+    <footer className="border-t border-slate-300/80 dark:border-slate-800/80 bg-[#E9EFF6] dark:bg-slate-950 text-slate-700 dark:text-slate-400 transition-colors">
+      <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-10">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
@@ -51,10 +51,18 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/courses?category=backend"
+                  href="/courses?category=ui-ux-figma"
                   className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
                 >
-                  معمار بک‌اند و میکروسرویس
+                  طراحی رابط کاربری و فیگما
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/courses?category=wordpress"
+                  className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
+                >
+                  طراحی سایت با وردپرس
                 </Link>
               </li>
               <li>
@@ -63,14 +71,6 @@ export function Footer() {
                   className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
                 >
                   مهندسی هوش مصنوعی و LLM
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/courses?category=cybersecurity"
-                  className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
-                >
-                  امنیت سایبری و تست نفوذ
                 </Link>
               </li>
             </ul>
@@ -91,7 +91,15 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/#playground"
+                  href="/roadmaps"
+                  className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
+                >
+                  نقشه‌های راه تعاملی
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/code-lab"
                   className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
                 >
                   آزمایشگاه اجرای زنده کد
@@ -99,7 +107,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/#challenges"
+                  href="/challenges"
                   className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
                 >
                   چالش‌های روزانه و امتیازدهی
@@ -107,10 +115,10 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/dashboard"
+                  href="/cart"
                   className="hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)]"
                 >
-                  پنل کاربری دانشجو
+                  سبد خرید و علاقه‌مندی‌ها
                 </Link>
               </li>
             </ul>
@@ -122,21 +130,21 @@ export function Footer() {
                 نمادهای اعتماد و ضمانت
               </h3>
               <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3 text-center">
-                  <ShieldCheck className="h-6 w-6 text-emerald-500 dark:text-emerald-400 mb-1" />
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-900/60 p-3 text-center">
+                  <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400 mb-1" />
                   <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
                     پرداخت امن شاپرک
                   </span>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-500">
                     ضمانت بازگشت وجه
                   </span>
                 </div>
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3 text-center">
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-900/60 p-3 text-center">
                   <Award className="h-6 w-6 text-[var(--accent-600)] dark:text-[var(--accent-400)] mb-1" />
                   <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
                     گواهینامه معتبر
                   </span>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-500">
                     قابل استعلام آنلاین
                   </span>
                 </div>
@@ -150,7 +158,7 @@ export function Footer() {
                 توسعه‌دهنده و ارتباط
               </h3>
               <ul className="space-y-2.5 text-xs">
-                <li className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
+                <li className="flex items-center gap-2 text-slate-900 dark:text-slate-200 font-semibold">
                   <User className="h-3.5 w-3.5 text-[var(--accent-600)] dark:text-[var(--accent-400)] shrink-0" />
                   <span>توسعه‌دهنده: {settings.developerName}</span>
                 </li>
@@ -165,7 +173,7 @@ export function Footer() {
                   </a>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Phone className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                  <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <a
                     href={`tel:${settings.developerPhone}`}
                     dir="ltr"
@@ -189,7 +197,7 @@ export function Footer() {
                   </a>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Send className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+                  <Send className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                   <a
                     href={`https://t.me/${settings.developerTelegram.replace(/^@/, "")}`}
                     target="_blank"
@@ -207,7 +215,7 @@ export function Footer() {
           )}
         </div>
 
-        <div className="mt-10 border-t border-slate-200 dark:border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
+        <div className="mt-10 border-t border-slate-300/80 dark:border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-600 dark:text-slate-500">
           <p>{settings.copyrightText}</p>
           <p className="mt-2 sm:mt-0">آکادمی تخصصی مهندسی نرم‌افزار</p>
         </div>

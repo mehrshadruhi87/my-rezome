@@ -221,7 +221,9 @@ export function applyUserPreferencesToDocument(prefs: UserPreferences): void {
   } else {
     root.classList.remove("dark");
     root.style.colorScheme = "light";
-    root.style.setProperty("--site-bg", "#f8fafc");
+    root.style.setProperty("--site-bg", "#f1f5f9");
+    root.style.setProperty("--surface-1", "#e9eff6");
+    root.style.setProperty("--surface-2", "#e2e8f0");
     root.style.setProperty("--site-text", "#0f172a");
     root.style.removeProperty("--color-slate-950");
     root.style.removeProperty("--color-slate-900");

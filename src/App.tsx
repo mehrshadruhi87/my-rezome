@@ -7,7 +7,6 @@ import {
   useUserPreferences,
 } from "./context/UserPreferencesContext";
 import { Header } from "./components/layout/Header";
-import { CartDrawer } from "./components/layout/CartDrawer";
 import { Footer } from "./components/layout/Footer";
 import { HomePage } from "./pages/HomePage";
 import { CoursesPage } from "./pages/CoursesPage";
@@ -17,6 +16,14 @@ import { CheckoutPage } from "./pages/CheckoutPage";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AdminPage } from "./pages/AdminPage";
+import { InteractiveRoadmaps } from "./components/home/InteractiveRoadmaps";
+import { LiveCodePlayground } from "./components/home/LiveCodePlayground";
+import { DailyChallengesSection } from "./components/home/DailyChallengesSection";
+import { NewsSection } from "./components/home/NewsSection";
+
+function DedicatedSectionPage({ children }: { children: React.ReactNode }) {
+  return <div className="py-12 pb-20">{children}</div>;
+}
 
 function AppRoutes() {
   const { pathname } = useRouter();
@@ -32,6 +39,34 @@ function AppRoutes() {
   if (cleanPath.startsWith("/courses/")) {
     const slug = cleanPath.slice("/courses/".length);
     return <CourseDetailPage slug={slug} />;
+  }
+  if (cleanPath === "/roadmaps") {
+    return (
+      <DedicatedSectionPage>
+        <InteractiveRoadmaps />
+      </DedicatedSectionPage>
+    );
+  }
+  if (cleanPath === "/code-lab") {
+    return (
+      <DedicatedSectionPage>
+        <LiveCodePlayground />
+      </DedicatedSectionPage>
+    );
+  }
+  if (cleanPath === "/challenges") {
+    return (
+      <DedicatedSectionPage>
+        <DailyChallengesSection />
+      </DedicatedSectionPage>
+    );
+  }
+  if (cleanPath === "/news") {
+    return (
+      <DedicatedSectionPage>
+        <NewsSection />
+      </DedicatedSectionPage>
+    );
   }
   if (cleanPath === "/cart") {
     return <CartPage />;
@@ -65,7 +100,7 @@ function AppShell() {
       className="min-h-screen flex flex-col bg-[var(--site-bg)] text-slate-900 dark:text-slate-100 antialiased selection:bg-[var(--accent-500)] selection:text-white"
     >
       {settings.showAnnouncementBar && settings.announcementText.trim() && (
-        <div className="bg-[var(--accent-600)] px-4 py-2 text-center text-xs font-bold text-white">
+        <div className="bg-gradient-to-l from-[var(--accent-700)] via-[var(--accent-600)] to-[var(--accent-500)] px-4 py-2 text-center text-xs font-bold text-white">
           {settings.announcementLink ? (
             <Link
               href={settings.announcementLink}
@@ -79,7 +114,6 @@ function AppShell() {
         </div>
       )}
       <Header />
-      <CartDrawer />
       <main className="flex-1">
         <AppRoutes />
       </main>
