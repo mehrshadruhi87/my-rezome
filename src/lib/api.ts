@@ -65,16 +65,23 @@ export function setAuthToken(_token: string | null): void {
   // Handled securely via HttpOnly cookies
 }
 
-// Sticky offline / stateless-serverless localStorage fallback state
-let useLocalFallbackMode = false;
+const RAW_VITE_API_URL = String(import.meta.env?.VITE_API_URL ?? "").trim();
+const HAS_EXPLICIT_REMOTE_API = /^https?:\/\//i.test(RAW_VITE_API_URL);
+
+// Default to direct localStorage persistence on static deployments (zero /api/* network calls)
+// unless an explicit external http(s):// VITE_API_URL backend is configured.
+let useLocalFallbackMode = !HAS_EXPLICIT_REMOTE_API;
 let customFallbackStorage: StorageAdapter | undefined;
 
 export function isOfflineFallbackActive(): boolean {
   return useLocalFallbackMode;
 }
 
-export function resetOfflineFallbackState(storage?: StorageAdapter): void {
-  useLocalFallbackMode = false;
+export function resetOfflineFallbackState(
+  storage?: StorageAdapter,
+  forceRemoteMode = false
+): void {
+  useLocalFallbackMode = forceRemoteMode ? false : !HAS_EXPLICIT_REMOTE_API;
   customFallbackStorage = storage;
 }
 

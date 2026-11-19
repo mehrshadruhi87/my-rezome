@@ -8,26 +8,31 @@ import {
 } from "./api";
 import { createMemoryStorage } from "./localBackend";
 
-test("apiRequest seamlessly falls back to localStorage on network offline error", async () => {
+test("apiRequest defaults to direct localStorage mode with zero network calls when VITE_API_URL is unset", async () => {
   const storage = createMemoryStorage();
   resetOfflineFallbackState(storage);
 
+  let fetchCalls = 0;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
-    throw new TypeError("Failed to fetch");
+    fetchCalls += 1;
+    throw new Error("fetch should not be called in static localStorage mode");
   }) as typeof fetch;
 
   try {
+    assert.equal(isOfflineFallbackActive(), true);
+
     const boot = await apiRequest<{
       categories: unknown[];
       settings: { brandPrimaryText: string };
     }>("/api/bootstrap");
-
-    assert.equal(isOfflineFallbackActive(), true);
     assert.ok(boot.categories.length > 0);
     assert.equal(boot.settings.brandPrimaryText, "کد");
 
-    // Admin login + settings change persists in localStorage
+    const coursesRes = await apiRequest<{ courses: unknown[] }>("/api/courses");
+    assert.ok(coursesRes.courses.length > 0);
+
+    // Admin login + settings + overview + orders + reviews with zero network calls
     await apiRequest("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
@@ -75,15 +80,41 @@ test("apiRequest seamlessly falls back to localStorage on network offline error"
       "/api/admin/reviews"
     );
     assert.ok(Array.isArray(reviewsRes.reviews));
+
+    assert.equal(fetchCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
     resetOfflineFallbackState();
   }
 });
 
-test("apiRequest switches to localStorage when serverless backend reports memory-store without DATABASE_URL", async () => {
+test("remote mode seamlessly falls back to localStorage on network offline error", async () => {
   const storage = createMemoryStorage();
-  resetOfflineFallbackState(storage);
+  resetOfflineFallbackState(storage, true);
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+
+  try {
+    const boot = await apiRequest<{
+      categories: unknown[];
+      settings: { brandPrimaryText: string };
+    }>("/api/bootstrap");
+
+    assert.equal(isOfflineFallbackActive(), true);
+    assert.ok(boot.categories.length > 0);
+    assert.equal(boot.settings.brandPrimaryText, "کد");
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetOfflineFallbackState();
+  }
+});
+
+test("remote mode switches to localStorage when serverless backend reports memory-store", async () => {
+  const storage = createMemoryStorage();
+  resetOfflineFallbackState(storage, true);
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
@@ -105,9 +136,9 @@ test("apiRequest switches to localStorage when serverless backend reports memory
   }
 });
 
-test("apiRequest preserves real 401/400 API errors when persistent backend is online", async () => {
+test("remote mode preserves real 401/400 API errors when persistent backend is online", async () => {
   const storage = createMemoryStorage();
-  resetOfflineFallbackState(storage);
+  resetOfflineFallbackState(storage, true);
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>

@@ -1102,12 +1102,18 @@ export async function dispatchLocalApiRequest<T>(
     } else {
       const found = db.users.find(
         (u) =>
-          u.email.toLowerCase() === normalizedEmail && u.role === "STUDENT"
+          u.email.toLowerCase() === normalizedEmail && u.role !== "ADMIN"
       );
       if (!found) {
         throw new LocalApiError(
           "کاربری با این ایمیل ثبت‌نام نکرده است. لطفاً ابتدا ثبت‌نام کنید.",
           401
+        );
+      }
+      if (found.isActive === false) {
+        throw new LocalApiError(
+          "حساب کاربری شما توسط مدیریت مسدود شده است.",
+          403
         );
       }
       if (!verifyPasswordSync(String(password), found.passwordHash)) {
@@ -1240,7 +1246,10 @@ export async function dispatchLocalApiRequest<T>(
     return { user: toPublicUser(currentUser) } as T;
   }
 
-  if (method === "POST" && pathname === "/api/auth/password/change") {
+  if (
+    (method === "PATCH" || method === "POST") &&
+    pathname === "/api/auth/password/change"
+  ) {
     const currentUser = requireUser(db, storage, headers);
     const { currentPassword, newPassword } = body;
     if (!newPassword || String(newPassword).length < 6) {
@@ -2098,7 +2107,8 @@ export async function dispatchLocalApiRequest<T>(
         403
       );
     }
-    db.users[idx].role = "STUDENT";
+    db.users[idx].role =
+      body?.role === "INSTRUCTOR" ? "INSTRUCTOR" : "STUDENT";
     writeLocalDb(db, storage);
     return { user: toPublicUser(db.users[idx]) } as T;
   }
