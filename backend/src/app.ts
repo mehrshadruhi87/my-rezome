@@ -3,7 +3,11 @@ import cors from "cors";
 import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import { env } from "./config/env";
-import { getRepository } from "./db";
+import {
+  fallbackToDevRepository,
+  getActiveDatabaseType,
+  getRepository,
+} from "./db";
 import { renderSwaggerHtml, swaggerSpec } from "./docs/swagger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { apiRateLimiter } from "./middlewares/rateLimiter";
@@ -88,30 +92,34 @@ export function createApp() {
   // Rate limit API requests
   app.use("/api", apiRateLimiter);
 
-  // Lazy one-time seed check when PostgreSQL tables are empty on cold start
+  // Lazy one-time seed check when PostgreSQL tables are empty on cold start.
+  // If PostgreSQL is unavailable or Prisma is ungenerated, fall back gracefully without crashing.
   let seedCheckDone = false;
   let inflightSeed: Promise<void> | null = null;
-  app.use("/api", async (_req, _res, next) => {
-    if (seedCheckDone) {
-      next();
-      return;
-    }
-    try {
-      const repo = getRepository();
-      if (repo.ensureSeeded) {
-        if (!inflightSeed) {
-          inflightSeed = repo.ensureSeeded().finally(() => {
-            inflightSeed = null;
-          });
+  app.use("/api", async (_req, res, next) => {
+    if (!seedCheckDone) {
+      try {
+        const repo = getRepository();
+        if (repo.ensureSeeded) {
+          if (!inflightSeed) {
+            inflightSeed = repo.ensureSeeded().finally(() => {
+              inflightSeed = null;
+            });
+          }
+          await inflightSeed;
         }
-        await inflightSeed;
+        seedCheckDone = true;
+      } catch (err) {
+        console.warn(
+          "Database cold-start check failed; switching to graceful fallback store:",
+          err instanceof Error ? err.message : err
+        );
+        fallbackToDevRepository();
+        seedCheckDone = true;
       }
-      seedCheckDone = true;
-      next();
-    } catch (err) {
-      seedCheckDone = false;
-      next(err);
     }
+    res.setHeader("X-CodeAcademy-Storage", getActiveDatabaseType());
+    next();
   });
 
   // Mount domain routers under /api

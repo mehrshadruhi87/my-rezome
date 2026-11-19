@@ -1,12 +1,11 @@
 [build]
-  command = "npx prisma generate && npx prisma db push --accept-data-loss && npm run build"
+  command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["@prisma/client", "prisma", "swagger-ui-express"]
-  included_files = ["prisma/schema.prisma", "node_modules/.prisma/**"]
 
 [[redirects]]
   from = "/api/*"

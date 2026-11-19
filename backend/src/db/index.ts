@@ -4,22 +4,34 @@ import { hasDatabaseConfigured } from "./prisma";
 import { PrismaRepository } from "./prismaRepository";
 import type { IRepository } from "./repository";
 
+export type ActiveDatabaseType =
+  | "postgresql-prisma"
+  | "dev-store"
+  | "memory-store";
+
 let repositoryInstance: IRepository | null = null;
-let activeBackendType: "postgresql-prisma" | "dev-store" = "dev-store";
+let activeBackendType: ActiveDatabaseType = "dev-store";
 
 export function getRepository(): IRepository {
   if (repositoryInstance) return repositoryInstance;
 
   if (hasDatabaseConfigured()) {
-    repositoryInstance = new PrismaRepository();
-    activeBackendType = "postgresql-prisma";
-    return repositoryInstance;
+    try {
+      repositoryInstance = new PrismaRepository();
+      activeBackendType = "postgresql-prisma";
+      return repositoryInstance;
+    } catch (err) {
+      console.warn(
+        "Prisma repository initialization failed; falling back gracefully:",
+        err instanceof Error ? err.message : err
+      );
+    }
   }
 
   if (env.isServerless) {
-    throw new Error(
-      "DATABASE_URL is required in Netlify Functions. Configure your Neon or Supabase PostgreSQL connection string."
-    );
+    repositoryInstance = new DevFileRepository({ inMemory: true });
+    activeBackendType = "memory-store";
+    return repositoryInstance;
   }
 
   repositoryInstance = new DevFileRepository();
@@ -28,12 +40,17 @@ export function getRepository(): IRepository {
 }
 
 export function fallbackToDevRepository(): IRepository {
+  if (env.isServerless) {
+    repositoryInstance = new DevFileRepository({ inMemory: true });
+    activeBackendType = "memory-store";
+    return repositoryInstance;
+  }
   repositoryInstance = new DevFileRepository();
   activeBackendType = "dev-store";
   return repositoryInstance;
 }
 
-export function getActiveDatabaseType(): "postgresql-prisma" | "dev-store" {
+export function getActiveDatabaseType(): ActiveDatabaseType {
   return activeBackendType;
 }
 

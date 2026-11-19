@@ -1,10 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
+import type { PrismaClient } from "@prisma/client";
 import { env } from "../config/env";
 
 declare global {
   // eslint-disable-next-line no-var
   var __codeacademyPrisma: PrismaClient | undefined;
 }
+
+const require = createRequire(import.meta.url);
 
 export function hasDatabaseConfigured(): boolean {
   const url = env.databaseUrl;
@@ -26,7 +29,13 @@ export function getPrismaClient(): PrismaClient {
   }
 
   if (!globalThis.__codeacademyPrisma) {
-    globalThis.__codeacademyPrisma = new PrismaClient({
+    const prismaPkg = require("@prisma/client") as {
+      PrismaClient?: new (opts?: unknown) => PrismaClient;
+    };
+    if (!prismaPkg?.PrismaClient) {
+      throw new Error("PrismaClient is not generated in this environment.");
+    }
+    globalThis.__codeacademyPrisma = new prismaPkg.PrismaClient({
       log: env.nodeEnv === "development" ? ["warn", "error"] : ["error"],
     });
   }

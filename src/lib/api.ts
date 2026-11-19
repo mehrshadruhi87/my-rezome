@@ -1,3 +1,10 @@
+import {
+  LocalApiError,
+  dispatchLocalApiRequest,
+  getDefaultStorage,
+  type StorageAdapter,
+} from "./localBackend";
+
 export interface PaginationMeta {
   page: number;
   limit: number;
@@ -58,9 +65,46 @@ export function setAuthToken(_token: string | null): void {
   // Handled securely via HttpOnly cookies
 }
 
+// Sticky offline / stateless-serverless localStorage fallback state
+let useLocalFallbackMode = false;
+let customFallbackStorage: StorageAdapter | undefined;
+
+export function isOfflineFallbackActive(): boolean {
+  return useLocalFallbackMode;
+}
+
+export function resetOfflineFallbackState(storage?: StorageAdapter): void {
+  useLocalFallbackMode = false;
+  customFallbackStorage = storage;
+}
+
+async function runLocalFallback<T>(
+  url: string,
+  options: RequestInit
+): Promise<{ data: T; message?: string; meta?: PaginationMeta }> {
+  try {
+    const data = await dispatchLocalApiRequest<T>(
+      url,
+      options,
+      customFallbackStorage ?? getDefaultStorage()
+    );
+    return { data };
+  } catch (err) {
+    if (err instanceof LocalApiError) {
+      throw new ApiError(err.message, err.status, "LOCAL_API_ERROR");
+    }
+    throw new ApiError(
+      err instanceof Error ? err.message : "خطا در پردازش محلی درخواست",
+      500,
+      "LOCAL_API_ERROR"
+    );
+  }
+}
+
 let inflightRefresh: Promise<boolean> | null = null;
 
 async function attemptTokenRefresh(): Promise<boolean> {
+  if (useLocalFallbackMode) return false;
   if (inflightRefresh) return inflightRefresh;
   inflightRefresh = (async () => {
     try {
@@ -84,6 +128,11 @@ export async function apiRequestWithMeta<T>(
   options: RequestInit = {},
   allowRefresh = true
 ): Promise<{ data: T; message?: string; meta?: PaginationMeta }> {
+  // If already in localStorage fallback mode (offline / no DATABASE_URL on Netlify), serve immediately from localStorage
+  if (useLocalFallbackMode) {
+    return runLocalFallback<T>(url, options);
+  }
+
   const isFormData =
     typeof FormData !== "undefined" && options.body instanceof FormData;
 
@@ -109,23 +158,31 @@ export async function apiRequestWithMeta<T>(
     response = await fetch(requestUrl, fetchInit);
   } catch {
     if (isGetRequest) {
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 250));
       try {
         response = await fetch(requestUrl, fetchInit);
       } catch {
-        throw new ApiError(
-          "ارتباط با سرور برقرار نشد. لطفاً اتصال اینترنت خود را بررسی کنید.",
-          0,
-          "NETWORK_ERROR"
-        );
+        useLocalFallbackMode = true;
+        return runLocalFallback<T>(url, options);
       }
     } else {
-      throw new ApiError(
-        "ارتباط با سرور برقرار نشد. لطفاً اتصال اینترنت خود را بررسی کنید.",
-        0,
-        "NETWORK_ERROR"
-      );
+      useLocalFallbackMode = true;
+      return runLocalFallback<T>(url, options);
     }
+  }
+
+  // If Netlify Functions runs without DATABASE_URL (ephemeral memory-store), switch to localStorage persistence
+  const storageMode = response.headers?.get("x-codeacademy-storage");
+  if (storageMode === "memory-store") {
+    useLocalFallbackMode = true;
+    return runLocalFallback<T>(url, options);
+  }
+
+  // If gateway/serverless function crashes (5xx) or SPA fallback serves HTML instead of JSON, fall back to localStorage
+  const contentType = response.headers?.get("content-type") || "";
+  if (response.status >= 500 || contentType.includes("text/html")) {
+    useLocalFallbackMode = true;
+    return runLocalFallback<T>(url, options);
   }
 
   const isAuthEndpoint =
@@ -144,7 +201,9 @@ export async function apiRequestWithMeta<T>(
   try {
     parsed = (await response.json()) as StandardApiEnvelope<T>;
   } catch {
-    parsed = null;
+    // Non-JSON response (e.g. static hosting fallback without Functions)
+    useLocalFallbackMode = true;
+    return runLocalFallback<T>(url, options);
   }
 
   if (

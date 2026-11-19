@@ -7,14 +7,17 @@ export function cn(...inputs: ClassValue[]): string {
 
 const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
 
-export function toPersianDigits(num: number | string): string {
+export function toPersianDigits(num: number | string | null | undefined): string {
+  if (num === null || num === undefined) return "۰";
   return num
     .toString()
     .replace(/\d/g, (digit) => PERSIAN_DIGITS[parseInt(digit, 10)] ?? digit);
 }
 
-export function formatToman(amount: number): string {
-  if (amount <= 0) return "رایگان";
+export function formatToman(amount: number | null | undefined): string {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    return "رایگان";
+  }
   const formatted = Math.round(amount).toLocaleString("en-US");
   return `${toPersianDigits(formatted)} تومان`;
 }

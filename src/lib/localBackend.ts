@@ -63,6 +63,8 @@ export interface DbUser {
   role: UserRole;
   phone: string | null;
   bio: string | null;
+  isActive?: boolean;
+  isEmailVerified?: boolean;
   createdAt: string;
 }
 
@@ -144,6 +146,7 @@ export interface DbReview {
   comment: string;
   userId: string;
   courseId: string;
+  status?: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
 }
 
@@ -196,6 +199,8 @@ export function toPublicUser(user: DbUser): PublicUser {
     role: user.role,
     phone: user.phone,
     bio: user.bio,
+    isActive: user.isActive !== false,
+    isEmailVerified: Boolean(user.isEmailVerified),
     createdAt: user.createdAt,
   };
 }
@@ -1178,6 +1183,107 @@ export async function dispatchLocalApiRequest<T>(
     return { ok: true } as T;
   }
 
+  if (method === "POST" && pathname === "/api/auth/logout-all") {
+    storage.removeItem(AUTH_TOKEN_KEY);
+    return { ok: true } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/refresh") {
+    const user = getAuthenticatedUser(db, storage, headers);
+    if (!user) {
+      throw new LocalApiError("نشست منقضی شده است.", 401);
+    }
+    return { ok: true, user: toPublicUser(user) } as T;
+  }
+
+  if (method === "GET" && pathname === "/api/auth/sessions") {
+    const user = requireUser(db, storage, headers);
+    return {
+      sessions: [
+        {
+          id: `ses_local_${user.id}`,
+          userAgent:
+            typeof navigator !== "undefined" ? navigator.userAgent : "Browser",
+          ipAddress: "127.0.0.1",
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+          isCurrent: true,
+        },
+      ],
+    } as T;
+  }
+
+  if (method === "DELETE" && /^\/api\/auth\/sessions\/[^/]+$/.test(pathname)) {
+    requireUser(db, storage, headers);
+    return { ok: true } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/verify/request") {
+    requireUser(db, storage, headers);
+    return {
+      ok: true,
+      devCode: "123456",
+      message: "کد تایید آزمایشی (حالت آفلاین): 123456",
+    } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/verify/confirm") {
+    const currentUser = requireUser(db, storage, headers);
+    const idx = db.users.findIndex((u) => u.id === currentUser.id);
+    if (idx !== -1) {
+      db.users[idx].isEmailVerified = true;
+      writeLocalDb(db, storage);
+      return { user: toPublicUser(db.users[idx]) } as T;
+    }
+    return { user: toPublicUser(currentUser) } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/password/change") {
+    const currentUser = requireUser(db, storage, headers);
+    const { currentPassword, newPassword } = body;
+    if (!newPassword || String(newPassword).length < 6) {
+      throw new LocalApiError("رمز عبور جدید باید حداقل ۶ کاراکتر باشد.", 400);
+    }
+    const idx = db.users.findIndex((u) => u.id === currentUser.id);
+    if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
+    if (
+      currentPassword &&
+      !verifyPasswordSync(String(currentPassword), db.users[idx].passwordHash)
+    ) {
+      throw new LocalApiError("رمز عبور فعلی اشتباه است.", 400);
+    }
+    db.users[idx].passwordHash = hashPasswordSync(String(newPassword));
+    writeLocalDb(db, storage);
+    return { ok: true } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/password/forgot") {
+    return {
+      ok: true,
+      devCode: "654321",
+      message: "کد بازیابی رمز عبور (حالت آفلاین): 654321",
+    } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/auth/password/reset") {
+    const { email, newPassword } = body;
+    const normalizedEmail = String(email ?? "").toLowerCase().trim();
+    const idx = db.users.findIndex(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+    if (idx === -1) {
+      throw new LocalApiError("کاربری با این ایمیل یافت نشد.", 404);
+    }
+    if (!newPassword || String(newPassword).length < 6) {
+      throw new LocalApiError("رمز عبور جدید باید حداقل ۶ کاراکتر باشد.", 400);
+    }
+    db.users[idx].passwordHash = hashPasswordSync(String(newPassword));
+    writeLocalDb(db, storage);
+    return { ok: true } as T;
+  }
+
   if (method === "GET" && pathname === "/api/auth/me") {
     const user = getAuthenticatedUser(db, storage, headers);
     if (!user) {
@@ -1581,9 +1687,20 @@ export async function dispatchLocalApiRequest<T>(
       (sum, o) => sum + o.finalAmount,
       0
     );
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const monthlyRevenue = completedOrders
+      .filter((o) => new Date(o.createdAt).getTime() >= thirtyDaysAgo)
+      .reduce((sum, o) => sum + o.finalAmount, 0);
+    const totalUsers = db.users.length;
     const totalStudents = db.users.filter((u) => u.role === "STUDENT").length;
+    const totalInstructors = db.users.filter(
+      (u) => u.role === "INSTRUCTOR"
+    ).length;
     const publishedCourses = db.courses.filter((c) => c.isPublished).length;
     const totalEnrollments = db.enrollments.length;
+    const pendingReviewsCount = db.reviews.filter(
+      (r) => (r.status ?? "APPROVED") === "PENDING"
+    ).length;
 
     const recentOrders: OrderRecord[] = [...db.orders]
       .sort(
@@ -1608,16 +1725,29 @@ export async function dispatchLocalApiRequest<T>(
         };
       });
 
+    const recentRegistrations = [...db.users]
+      .sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, 10)
+      .map((u) => toPublicUser(u));
+
     return {
       stats: {
-        totalRevenue,
+        totalUsers,
         totalStudents,
+        totalInstructors,
         publishedCourses,
         totalCourses: db.courses.length,
+        totalOrdersCount: db.orders.length,
         completedOrdersCount: completedOrders.length,
+        totalRevenue,
+        monthlyRevenue,
         totalEnrollments,
+        pendingReviewsCount,
       },
       recentOrders,
+      recentRegistrations,
     } as T;
   }
 
@@ -1993,6 +2123,122 @@ export async function dispatchLocalApiRequest<T>(
     db.courses[crsIdx].studentsCount += 1;
     writeLocalDb(db, storage);
     return { ok: true } as T;
+  }
+
+  // --- ADMIN ORDERS, REVIEWS, USER STATUS & UPLOADS ---
+  if (method === "GET" && pathname === "/api/admin/orders") {
+    requireAdminUser(db, storage, headers);
+    const orders: OrderRecord[] = [...db.orders]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .map((o) => {
+        const u = db.users.find((usr) => usr.id === o.userId);
+        return {
+          ...o,
+          userName: u?.name ?? "کاربر",
+          userEmail: u?.email ?? "",
+          items: o.items.map((item) => {
+            const c = db.courses.find((crs) => crs.id === item.courseId);
+            return {
+              ...item,
+              courseTitle: c?.title ?? "دوره آموزشی",
+              courseSlug: c?.slug ?? "",
+              courseThumbnail: c?.thumbnail ?? "",
+            };
+          }),
+        };
+      });
+    return { orders } as T;
+  }
+
+  const adminOrderStatusMatch = pathname.match(
+    /^\/api\/admin\/orders\/([^/]+)\/status$/
+  );
+  if (method === "PATCH" && adminOrderStatusMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminOrderStatusMatch[1]);
+    const idx = db.orders.findIndex((o) => o.id === id);
+    if (idx === -1) throw new LocalApiError("سفارش یافت نشد.", 404);
+    if (body?.status) {
+      db.orders[idx].status = body.status as OrderStatus;
+      writeLocalDb(db, storage);
+    }
+    return { order: db.orders[idx] } as T;
+  }
+
+  if (method === "GET" && pathname === "/api/admin/reviews") {
+    requireAdminUser(db, storage, headers);
+    const reviews = [...db.reviews]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .map((r) => {
+        const u = db.users.find((usr) => usr.id === r.userId);
+        const c = db.courses.find((crs) => crs.id === r.courseId);
+        return {
+          ...r,
+          status: r.status ?? "APPROVED",
+          userName: u?.name ?? "دانشجو",
+          courseTitle: c?.title ?? "دوره",
+        };
+      });
+    return { reviews } as T;
+  }
+
+  const adminReviewModMatch = pathname.match(
+    /^\/api\/admin\/reviews\/([^/]+)\/moderate$/
+  );
+  if (method === "PATCH" && adminReviewModMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminReviewModMatch[1]);
+    const idx = db.reviews.findIndex((r) => r.id === id);
+    if (idx === -1) throw new LocalApiError("دیدگاه یافت نشد.", 404);
+    db.reviews[idx].status = body?.status ?? "APPROVED";
+    writeLocalDb(db, storage);
+    return { review: db.reviews[idx] } as T;
+  }
+
+  const deleteReviewMatch = pathname.match(/^\/api\/reviews\/([^/]+)$/);
+  if (method === "DELETE" && deleteReviewMatch) {
+    requireUser(db, storage, headers);
+    const id = decodeURIComponent(deleteReviewMatch[1]);
+    db.reviews = db.reviews.filter((r) => r.id !== id);
+    writeLocalDb(db, storage);
+    return { ok: true } as T;
+  }
+
+  const adminUserStatusMatch = pathname.match(
+    /^\/api\/admin\/users\/([^/]+)\/status$/
+  );
+  if (method === "PATCH" && adminUserStatusMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminUserStatusMatch[1]);
+    const idx = db.users.findIndex((u) => u.id === id);
+    if (idx === -1) throw new LocalApiError("کاربر یافت نشد.", 404);
+    db.users[idx].isActive = Boolean(body?.isActive);
+    writeLocalDb(db, storage);
+    return { user: toPublicUser(db.users[idx]) } as T;
+  }
+
+  if (method === "POST" && pathname === "/api/uploads") {
+    requireUser(db, storage, headers);
+    let url = "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg";
+    if (typeof FormData !== "undefined" && options.body instanceof FormData) {
+      const file = options.body.get("file");
+      if (file && typeof FileReader !== "undefined" && file instanceof Blob) {
+        url = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve(typeof reader.result === "string" ? reader.result : url);
+          reader.onerror = () => resolve(url);
+          reader.readAsDataURL(file);
+        });
+      }
+    }
+    return { url } as T;
   }
 
   // --- PLATFORM SETTINGS ---

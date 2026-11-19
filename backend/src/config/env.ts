@@ -1,6 +1,9 @@
 import dotenv from "dotenv";
 
-const dotenvResult = dotenv.config();
+const isServerlessHost =
+  Boolean(process.env.NETLIFY) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const dotenvResult = isServerlessHost ? { parsed: undefined } : dotenv.config();
 const preserveHostKeys = new Set([
   "PORT",
   "NODE_ENV",
