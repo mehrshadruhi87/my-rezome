@@ -1,0 +1,855 @@
+{
+  "users": [
+    {
+      "id": "usr_mwmptif7_6a185edad1ad",
+      "name": "علی رضایی",
+      "email": "ali.pw.1795042267908@test.ir",
+      "phone": "09121112233",
+      "bio": null,
+      "avatarUrl": null,
+      "role": "STUDENT",
+      "passwordHash": "$2b$10$jTYfbI0sgafhd8QVvT.sm.wSNaEGHZsRr.5zmE0whzcTx8FZAgPo2",
+      "isEmailVerified": false,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:51:08.035Z",
+      "updatedAt": "2026-11-18T22:51:08.035Z"
+    },
+    {
+      "id": "usr_mwmpq962_d21a31d3bc7c",
+      "name": "علی رضایی",
+      "email": "ali.pw.1795042114941@test.ir",
+      "phone": "09121112233",
+      "bio": null,
+      "avatarUrl": null,
+      "role": "STUDENT",
+      "passwordHash": "$2b$10$HB5WbylhGFfRFZHff1vXhOsmi2wPmn5I06WG/WTMAgniyoYqGHltS",
+      "isEmailVerified": false,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:48:36.073Z",
+      "updatedAt": "2026-11-18T22:48:36.073Z"
+    },
+    {
+      "id": "usr_mwmp83rt_f822fad91373",
+      "name": "علی رضایی",
+      "email": "ali.pw.1795041268088@test.ir",
+      "phone": "09121112233",
+      "bio": null,
+      "avatarUrl": null,
+      "role": "STUDENT",
+      "passwordHash": "$2b$10$NdMBmQnerw0Mjn3ngywOfuH0JtCUsrQJ3.vvundeRFPCsWQCCkp6W",
+      "isEmailVerified": false,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:34:29.273Z",
+      "updatedAt": "2026-11-18T22:34:29.273Z"
+    },
+    {
+      "id": "usr_admin_1",
+      "name": "مهرشاد روحی",
+      "email": "mehrshadruhi87@gmail.com",
+      "phone": "09102554874",
+      "bio": "مدیر سیستم و معمار ارشد نرم‌افزار کدآکادمی",
+      "avatarUrl": null,
+      "role": "ADMIN",
+      "passwordHash": "$2b$10$ray.p0h50mEoKrxzHWfj5ObCZ174bMxOkkbZl7UGLK/1H3a7Kck3y",
+      "isEmailVerified": true,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:30:00.761Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z"
+    },
+    {
+      "id": "usr_instructor_1",
+      "name": "دکتر کیوان نادری",
+      "email": "instructor@codeacademy.ir",
+      "phone": "09123456789",
+      "bio": "معمار ارشد فرانت‌اند و فول‌استک با بیش از ۱۱ سال تجربه در پروژه‌های سازمانی.",
+      "avatarUrl": null,
+      "role": "INSTRUCTOR",
+      "passwordHash": "$2b$10$SNV6m7Plleid4q4Y6fAGW.OqpRz4PkSzaTUEw5OqOb8jt7iChf2Dq",
+      "isEmailVerified": true,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:30:00.761Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z"
+    },
+    {
+      "id": "usr_student_1",
+      "name": "علی محمدی",
+      "email": "student@codeacademy.ir",
+      "phone": "09120001122",
+      "bio": "توسعه‌دهنده وب و علاقه‌مند به معماری مدرن نرم‌افزار.",
+      "avatarUrl": null,
+      "role": "STUDENT",
+      "passwordHash": "$2b$10$waZqA8IS4FpJ2mblgkP1H.0wCTtDGZ25Nkb8jDv8K0J7o34jn9x0e",
+      "isEmailVerified": true,
+      "isPhoneVerified": false,
+      "isActive": true,
+      "createdAt": "2026-11-18T22:30:00.761Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "ses_mwmr8nbz_dd9dc8a26d7c",
+      "userId": "usr_admin_1",
+      "refreshTokenHash": "5e33c29c5050d6e023c9666321cb67f33e5a9e08156370856e92e4f952ad05a9",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T23:30:53.858Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T23:30:53.858Z"
+    },
+    {
+      "id": "ses_mwmqckue_d2b83d6c9776",
+      "userId": "usr_admin_1",
+      "refreshTokenHash": "0b2293e76b0924f1d0d7595e2115c481f1aa679b3159202b2dbcc39855a49c1b",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T23:05:57.640Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T23:05:57.640Z"
+    },
+    {
+      "id": "ses_mwmqci4p_a9a479aa55dd",
+      "userId": "usr_admin_1",
+      "refreshTokenHash": "b8e2bf7559a8aabff703a128679b5a0db0bb205d30d88f319229bdb55f62d847",
+      "userAgent": "curl/7.88.1",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T23:05:54.123Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T23:05:54.124Z"
+    },
+    {
+      "id": "ses_mwmq9fjw_5cea0567b53c",
+      "userId": "usr_admin_1",
+      "refreshTokenHash": "cc9ff5700a93e4fb9f1cf73b01f90ad4116f77a79282579d48444c5536593cb0",
+      "userAgent": "curl/7.88.1",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T23:03:30.816Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T23:03:30.816Z"
+    },
+    {
+      "id": "ses_mwmpv82j_d1c3e5299b0b",
+      "userId": "usr_admin_1",
+      "refreshTokenHash": "ce5da6a5f1fffed13062880b0a0f1c1f5ebaf25883f9bbf5af52f564d18c1a78",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T22:52:27.932Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T22:52:27.932Z"
+    },
+    {
+      "id": "ses_mwmpupa4_0df7ae983359",
+      "userId": "usr_student_1",
+      "refreshTokenHash": "56a4bb02ae45d44d549203fb53ce9690316c1b4f549b5dd701fd6d5f74892f8a",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T22:52:03.581Z",
+      "revokedAt": "2026-11-18T22:52:24.858Z",
+      "createdAt": "2026-11-18T22:52:03.581Z"
+    },
+    {
+      "id": "ses_mwmptif8_d782d278bd2d",
+      "userId": "usr_mwmptif7_6a185edad1ad",
+      "refreshTokenHash": "b535a6f6e947257a38b48e35246d679e354e7d9442ffd1076a0cb58935fd7d0b",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T22:51:08.038Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T22:51:08.038Z"
+    },
+    {
+      "id": "ses_mwmpq962_a040b3952f84",
+      "userId": "usr_mwmpq962_d21a31d3bc7c",
+      "refreshTokenHash": "c6e367c556b5587856e48234450033d9a051696f4a065df9b67a14ca53d388ea",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-11-25T22:48:36.076Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T22:48:36.076Z"
+    },
+    {
+      "id": "ses_mwmp83ru_d39c60ef61fb",
+      "userId": "usr_mwmp83rt_f822fad91373",
+      "refreshTokenHash": "898981204e21fa6ad80849ef1dec9fe537fc96f2896a27f1c0070beb7917f0d8",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.8059.12 Safari/537.36",
+      "ipAddress": "127.0.0.1",
+      "expiresAt": "2026-12-18T22:34:29.277Z",
+      "revokedAt": null,
+      "createdAt": "2026-11-18T22:34:29.277Z"
+    }
+  ],
+  "verificationTokens": [
+    {
+      "id": "vtk_mwmptifc_de29b3755a62",
+      "userId": "usr_mwmptif7_6a185edad1ad",
+      "purpose": "EMAIL_VERIFY",
+      "target": "ali.pw.1795042267908@test.ir",
+      "codeHash": "32930b6adb4c174f9b04dc04120f51469f21492724001b8ebf884d40a7e838f4",
+      "expiresAt": "2026-11-18T23:06:08.040Z",
+      "consumedAt": null,
+      "createdAt": "2026-11-18T22:51:08.040Z"
+    },
+    {
+      "id": "vtk_mwmpq965_d0f1bbd4219a",
+      "userId": "usr_mwmpq962_d21a31d3bc7c",
+      "purpose": "EMAIL_VERIFY",
+      "target": "ali.pw.1795042114941@test.ir",
+      "codeHash": "ab225aec333057de266d251575b59338462155c620e284e04585038a4c449d12",
+      "expiresAt": "2026-11-18T23:03:36.077Z",
+      "consumedAt": null,
+      "createdAt": "2026-11-18T22:48:36.077Z"
+    },
+    {
+      "id": "vtk_mwmp83ry_b9760870edf4",
+      "userId": "usr_mwmp83rt_f822fad91373",
+      "purpose": "EMAIL_VERIFY",
+      "target": "ali.pw.1795041268088@test.ir",
+      "codeHash": "c121c8e4fba3ea6e1004facec62848ba9cefe5769466a6fadf1b44ee06d07540",
+      "expiresAt": "2026-11-18T22:49:29.278Z",
+      "consumedAt": null,
+      "createdAt": "2026-11-18T22:34:29.278Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat_frontend",
+      "name": "توسعه فرانت‌اند",
+      "slug": "frontend",
+      "icon": "Layout",
+      "description": "React، Next.js، TypeScript و طراحی رابط کاربری مدرن"
+    },
+    {
+      "id": "cat_backend",
+      "name": "توسعه بک‌اند",
+      "slug": "backend",
+      "icon": "Server",
+      "description": "Node.js، NestJS، Go، Python Django و معماری میکروسرویس"
+    },
+    {
+      "id": "cat_ai",
+      "name": "هوش مصنوعی و دیتا",
+      "slug": "ai-data",
+      "icon": "BrainCircuit",
+      "description": "یادگیری ماشین، دیپ لرنینگ، LLM، پایتون و مهندسی داده"
+    },
+    {
+      "id": "cat_sec",
+      "name": "امنیت شبکه و هک قانونمند",
+      "slug": "cybersecurity",
+      "icon": "ShieldCheck",
+      "description": "تست نفوذ وب، امنیت شبکه، DevSecOps و تحلیل بدافزار"
+    },
+    {
+      "id": "cat_mobile",
+      "name": "برنامه‌نویسی موبایل",
+      "slug": "mobile",
+      "icon": "Smartphone",
+      "description": "Flutter، React Native، Kotlin و اپلیکیشن‌های کراس‌پلتفرم"
+    },
+    {
+      "id": "cat_devops",
+      "name": "دوآپس و کلود",
+      "slug": "devops",
+      "icon": "CloudCog",
+      "description": "Docker، Kubernetes، CI/CD، Linux و زیرساخت ابری"
+    }
+  ],
+  "courses": [
+    {
+      "id": "crs_nextjs_15",
+      "title": "بوت‌کمپ جامع Next.js 15، React 19 و معماری فول‌استک سازمانی",
+      "slug": "nextjs-15-fullstack-bootcamp",
+      "shortDesc": "آموزش پروژه‌محور ساخت اپلیکیشن‌های مقیاس‌پذیر با Next.js 15 App Router، Server Actions، Prisma و TypeScript.",
+      "description": "در این دوره فوق‌پیشرفته و کاملا پروژه‌محور، از مفاهیم پایه React 19 و رندرینگ سمت سرور (SSR/ISR) شروع کرده و تا پیاده‌سازی کامل یک پلتفرم فروشگاهی و SaaS با Next.js 15 پیش می‌رویم. تمامی مباحث امنیتی، احراز هویت، کشینگ پیشرفته و استقرار روی Docker پوشش داده شده است.",
+      "thumbnail": "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+      "previewVideoUrl": "",
+      "price": 4800000,
+      "discountPrice": 3450000,
+      "level": "ALL_LEVELS",
+      "duration": "۶۴ ساعت",
+      "prerequisites": "آشنایی با جاوااسکریپت و مبانی ری‌اکت",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "دکتر کیوان نادری",
+      "instructorTitle": "معمار ارشد فرانت‌اند",
+      "instructorBio": "بیش از ۱۱ سال تجربه تخصصی در مهندسی فرانت‌اند، مدرس بیش از ۲۰ هزار دانشجو در سراسر کشور.",
+      "studentsCount": 1421,
+      "rating": 4.9,
+      "isPublished": true,
+      "isFeatured": true,
+      "categoryId": "cat_frontend",
+      "createdAt": "2026-10-20T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_nx_1",
+          "courseId": "crs_nextjs_15",
+          "title": "فصل اول: معماری مدرن وب و هسته Next.js 15",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_nx_1",
+              "chapterId": "ch_nx_1",
+              "title": "معرفی دوره، نقشه راه و بررسی پروژه نهایی",
+              "duration": "۱۸:۲۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "آشنایی با ساختار App Router، استراتژی‌های رندرینگ و معماری فول‌استک در پروژه‌های واقعی.",
+              "codeSnippet": "export default async function CourseOverviewPage() {\n  const courses = await getPublishedCourses();\n  return <CatalogGrid items={courses} />;\n}",
+              "attachments": []
+            },
+            {
+              "id": "ls_nx_2",
+              "chapterId": "ch_nx_1",
+              "title": "تفاوت عمیق Server Components و Client Components",
+              "duration": "۳۲:۱۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 2,
+              "summary": "کاهش حجم باندل جاوااسکریپت با تفکیک مرزهای کلاینت و سرور و جریان استریمینگ Suspense.",
+              "codeSnippet": "\"use client\";\nimport { useOptimistic } from \"react\";\n\nexport function EnrollButton({ initialCount }: { initialCount: number }) {\n  const [count, addOptimistic] = useOptimistic(initialCount, (s) => s + 1);\n  return <button onClick={() => addOptimistic(1)}>{count} دانشجو</button>;\n}",
+              "attachments": []
+            },
+            {
+              "id": "ls_nx_3",
+              "chapterId": "ch_nx_1",
+              "title": "معماری فولدرها، Dynamic Routes و Parallel Routes",
+              "duration": "۴۵:۰۰",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 3,
+              "summary": "پیاده‌سازی روتینگ پیشرفته، Intercepting Routes برای مودال‌ها و مدیریت خطای لایه‌ای.",
+              "codeSnippet": "export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {\n  const { slug } = await params;\n  return { title: `دوره ${slug} | کدآکادمی` };\n}",
+              "attachments": []
+            }
+          ]
+        },
+        {
+          "id": "ch_nx_2",
+          "courseId": "crs_nextjs_15",
+          "title": "فصل دوم: کار با پایگاه داده، Prisma ORM و Server Actions",
+          "position": 2,
+          "lessons": [
+            {
+              "id": "ls_nx_4",
+              "chapterId": "ch_nx_2",
+              "title": "طراحی اسکیماهای رابطه‌ای پیچیده با Prisma و PostgreSQL",
+              "duration": "۳۸:۱۵",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 1,
+              "summary": "مدل‌سازی روابط یک‌به‌چند و چندبه‌چند بین دوره‌ها، فصل‌ها، سفارش‌ها و دسترسی‌های کاربران.",
+              "codeSnippet": "model Enrollment {\n  id        String   @id @default(cuid())\n  userId    String\n  courseId  String\n  @@unique([userId, courseId])\n}",
+              "attachments": []
+            },
+            {
+              "id": "ls_nx_5",
+              "chapterId": "ch_nx_2",
+              "title": "پیاده‌سازی Mutations امن با Server Actions و اعتبارسنجی",
+              "duration": "۵۰:۴۰",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 2,
+              "summary": "اعتبارسنجی ورودی‌ها در سمت سرور، کنترل دسترسی RBAC و بازسازی هوشمند کش.",
+              "codeSnippet": "export async function createOrder(courseIds: string[]) {\n  const session = await requireSession();\n  return prisma.$transaction(async (tx) => {\n    return tx.order.create({ data: { userId: session.id, status: \"PENDING\" } });\n  });\n}",
+              "attachments": []
+            }
+          ]
+        },
+        {
+          "id": "ch_nx_3",
+          "courseId": "crs_nextjs_15",
+          "title": "فصل سوم: احراز هویت، درگاه پرداخت و دیپلوی پروداکشن",
+          "position": 3,
+          "lessons": [
+            {
+              "id": "ls_nx_6",
+              "chapterId": "ch_nx_3",
+              "title": "پیاده‌سازی RBAC و اتصال به درگاه پرداخت",
+              "duration": "۵۵:۲۰",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 1,
+              "summary": "مدیریت نشست امن، وریفای تراکنش‌های بانکی و فعال‌سازی آنی دوره‌ها پس از پرداخت موفق.",
+              "codeSnippet": "if (paymentVerified) {\n  await grantEnrollments(order.userId, order.items);\n}",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crs_ai_llm",
+      "title": "متخصص هوش مصنوعی، پایتون، LLM و مهندسی ایجنت‌های هوشمند",
+      "slug": "python-ai-llm-engineering",
+      "shortDesc": "از مبانی پایتون و یادگیری ماشین تا ساخت سیستم‌های RAG، فاین‌تیون مدل‌های زبانی و ایجنت‌های خودکار.",
+      "description": "این بوت‌کمپ جامع شما را از سطح مقدماتی پایتون به یک مهندس هوش مصنوعی آماده ورود به بازار کار تبدیل می‌کند. کار با PyTorch، LangChain، پایگاه‌داده‌های برداری (Vector DB) و پیاده‌سازی دستیارهای هوشمند فارسی را به صورت عملی یاد می‌گیرید.",
+      "thumbnail": "/src/assets/images/course_ai_llm_1794952832798.jpg",
+      "previewVideoUrl": "",
+      "price": 5900000,
+      "discountPrice": 4200000,
+      "level": "ALL_LEVELS",
+      "duration": "۷۸ ساعت",
+      "prerequisites": "بدون پیش‌نیاز (شروع از صفر پایتون)",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "دکتر امیرحسین فرهادی",
+      "instructorTitle": "پژوهشگر ارشد هوش مصنوعی و NLP",
+      "instructorBio": "دکترای هوش مصنوعی و مشاور تیم‌های داده‌کاوی و پیاده‌سازی مدل‌های زبانی سازمانی.",
+      "studentsCount": 1890,
+      "rating": 5,
+      "isPublished": true,
+      "isFeatured": true,
+      "categoryId": "cat_ai",
+      "createdAt": "2026-10-18T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_ai_1",
+          "courseId": "crs_ai_llm",
+          "title": "فصل اول: پایتون پیشرفته برای علوم داده و هوش مصنوعی",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_ai_1",
+              "chapterId": "ch_ai_1",
+              "title": "نقشه راه مهندسی AI و آماده‌سازی محیط Jupyter و CUDA",
+              "duration": "۲۲:۰۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "نصب ابزارهای علمی پایتون، مدیریت محیط‌های مجازی و پیکربندی شتاب‌دهنده گرافیکی.",
+              "codeSnippet": "import torch\nprint(\"GPU Available:\", torch.cuda.is_available())",
+              "attachments": []
+            },
+            {
+              "id": "ls_ai_2",
+              "chapterId": "ch_ai_1",
+              "title": "پردازش ماتریسی سریع با NumPy و تحلیل داده با Pandas",
+              "duration": "۴۹:۳۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 2,
+              "summary": "جبر خطی برداری، پاک‌سازی دیتاست‌های متنی فارسی و آماده‌سازی فیچرها.",
+              "codeSnippet": "import numpy as np\nembeddings = np.random.randn(1024, 768)",
+              "attachments": []
+            }
+          ]
+        },
+        {
+          "id": "ch_ai_2",
+          "courseId": "crs_ai_llm",
+          "title": "فصل دوم: شبکه‌های عصبی عمیق و معماری Transformer",
+          "position": 2,
+          "lessons": [
+            {
+              "id": "ls_ai_3",
+              "chapterId": "ch_ai_2",
+              "title": "کالبدشکافی مکانیزم Attention و مدل‌های زبانی بزرگ (LLM)",
+              "duration": "۶۴:۱۰",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 1,
+              "summary": "درک عمیق Self-Attention، توکنایزرها و نحوه استنتاج مدل‌های زبانی.",
+              "codeSnippet": "scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crs_nestjs_backend",
+      "title": "معماری میکروسرویس و بک‌اند مقیاس‌پذیر با Node.js، NestJS و RabbitMQ",
+      "slug": "nestjs-microservices-architecture",
+      "shortDesc": "طراحی سیستم‌های توزیع‌شده، Event-Driven Architecture، Redis، کلین آرکیتکچر و تست‌نویسی حرفه‌ای.",
+      "description": "اگر می‌خواهید از یک برنامه‌نویس معمولی بک‌اند به یک Senior Backend Engineer تبدیل شوید، این دوره دقیقا برای شما طراحی شده است. پیاده‌سازی سیستم بانکی و سفارش‌گیری با قابلیت تحمل میلیون‌ها درخواست.",
+      "thumbnail": "/src/assets/images/course_nestjs_backend_1794952832658.jpg",
+      "previewVideoUrl": "",
+      "price": 4200000,
+      "discountPrice": 2990000,
+      "level": "ADVANCED",
+      "duration": "۵۲ ساعت",
+      "prerequisites": "آشنایی با جاوااسکریپت/تایپ‌اسکریپت و مفاهیم پایه بک‌اند",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "مهندس پویا رستمی",
+      "instructorTitle": "لید فنی بک‌اند",
+      "instructorBio": "توسعه‌دهنده سیستم‌های پرترافیک فین‌تک و مدرس معماری نرم‌افزار.",
+      "studentsCount": 940,
+      "rating": 4.8,
+      "isPublished": true,
+      "isFeatured": true,
+      "categoryId": "cat_backend",
+      "createdAt": "2026-10-15T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_ns_1",
+          "courseId": "crs_nestjs_backend",
+          "title": "فصل اول: معماری تمیز (DDD & Clean Architecture) در NestJS",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_ns_1",
+              "chapterId": "ch_ns_1",
+              "title": "چرا مونولیت‌ها شکست می‌خورند؟ ورود به دنیای میکروسرویس",
+              "duration": "۲۵:۱۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "مقایسه Bounded Contexts، الگوهای ارتباط سنکرون و آسنکرون و مدیریت خطا در سیستم‌های توزیع‌شده.",
+              "codeSnippet": "@EventPattern(\"order.completed\")\nasync handleOrderCompleted(@Payload() event: OrderCompletedEvent) {\n  await this.enrollmentService.activateCourse(event);\n}",
+              "attachments": []
+            },
+            {
+              "id": "ls_ns_2",
+              "chapterId": "ch_ns_1",
+              "title": "پیاده‌سازی Dependency Injection و لایه‌بندی Domain",
+              "duration": "۴۴:۲۰",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 2,
+              "summary": "جداسازی منطق دامنه از زیرساخت دیتابیس با الگوهای Repository و Unit of Work.",
+              "codeSnippet": "export interface OrderRepository {\n  save(order: OrderAggregate): Promise<void>;\n}",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crs_cybersecurity",
+      "title": "متخصص تست نفوذ وب و باگ بانتی (OSWE & Bug Bounty Hunter)",
+      "slug": "web-penetration-testing-bug-bounty",
+      "shortDesc": "کشف آسیب‌پذیری‌های بحرانی وب، OWASP Top 10 پیشرفته، دور زدن WAF و کسب درآمد دلاری از باگ بانتی.",
+      "description": "آموزش صددرصد عملی هک قانونمند و امنیت وب‌اپلیکیشن‌ها روی آزمایشگاه‌های واقعی. از SQL Injection و XSS پیشرفته تا SSRF، Deserialization و تحلیل کد منبع.",
+      "thumbnail": "/src/assets/images/course_cybersecurity_1794952833875.jpg",
+      "previewVideoUrl": "",
+      "price": 5100000,
+      "discountPrice": 3800000,
+      "level": "INTERMEDIATE",
+      "duration": "۶۰ ساعت",
+      "prerequisites": "آشنایی مقدماتی با شبکه و پروتکل HTTP",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "مهندس سهراب کاظمی",
+      "instructorTitle": "محقق ارشد امنیت سایبری",
+      "instructorBio": "شکارچی باگ در پلتفرم‌های بین‌المللی با بیش از ۲۰۰ گزارش معتبر امنیتی.",
+      "studentsCount": 1150,
+      "rating": 4.9,
+      "isPublished": true,
+      "isFeatured": true,
+      "categoryId": "cat_sec",
+      "createdAt": "2026-10-12T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_sec_1",
+          "courseId": "crs_cybersecurity",
+          "title": "فصل اول: متدولوژی Recon و شناسایی سطح حمله",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_sec_1",
+              "chapterId": "ch_sec_1",
+              "title": "معرفی لابراتوار دوره و ابزارهای Burp Suite Pro",
+              "duration": "۲۹:۰۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "پیکربندی پروکسی رهگیری ترافیک، تحلیل هدرهای امنیتی و شناخت نقاط ورودی API.",
+              "codeSnippet": "curl -I https://target.example/api/v1/health",
+              "attachments": []
+            },
+            {
+              "id": "ls_sec_2",
+              "chapterId": "ch_sec_1",
+              "title": "اتوماسیون فرآیند Subdomain Enumeration و اسکن سرویس‌ها",
+              "duration": "۴۷:۱۵",
+              "videoUrl": "",
+              "isFree": false,
+              "position": 2,
+              "summary": "شناسایی زیرساخت‌های پنهان، بررسی فایل‌های JS و کشف Endpointهای فراموش‌شده.",
+              "codeSnippet": "subfinder -d example.com -silent | httpx -status-code -title",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crs_devops_k8s",
+      "title": "آموزش جامع Docker، Kubernetes و مهندسی DevOps در پروداکشن",
+      "slug": "devops-docker-kubernetes-masterclass",
+      "shortDesc": "کانتینرسازی، ارکستریشن کلاسترهای کوبرنتیز، GitLab CI/CD، مانیتورینگ Prometheus و Grafana.",
+      "description": "صفر تا صد زیرساخت مدرن ابری و اتوماسیون استقرار نرم‌افزار. یاد بگیرید چگونه سرویس‌های بدون قطعی (Zero-Downtime) را روی سرورهای لینوکسی و کلود مدیریت کنید.",
+      "thumbnail": "/src/assets/images/course_devops_k8s_1794952834411.jpg",
+      "previewVideoUrl": "",
+      "price": 3900000,
+      "discountPrice": 2850000,
+      "level": "INTERMEDIATE",
+      "duration": "۴۶ ساعت",
+      "prerequisites": "آشنایی با دستورات پایه لینوکس",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "مهندس نیما شریفی",
+      "instructorTitle": "مهندس ارشد SRE و زیرساخت ابری",
+      "instructorBio": "مدیر زیرساخت ابری با تجربه مدیریت کلاسترهای بیش از ۲۰۰ نود.",
+      "studentsCount": 780,
+      "rating": 4.8,
+      "isPublished": true,
+      "isFeatured": false,
+      "categoryId": "cat_devops",
+      "createdAt": "2026-10-10T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_dev_1",
+          "courseId": "crs_devops_k8s",
+          "title": "فصل اول: تسلط کامل بر Docker و بهینه‌سازی ایمیج‌ها",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_dev_1",
+              "chapterId": "ch_dev_1",
+              "title": "معماری هسته لینوکس، Namespaces و Cgroups",
+              "duration": "۲۰:۳۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "درک سازوکار ایزوله‌سازی کانتینرها در هسته لینوکس و تفاوت آن با ماشین‌های مجازی.",
+              "codeSnippet": "FROM node:22-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crs_algorithms_free",
+      "title": "مبانی الگوریتم، ساختمان داده و آمادگی مصاحبه شرکت‌های بزرگ",
+      "slug": "algorithms-data-structures-free",
+      "shortDesc": "دوره رایگان تقویت تفکر الگوریتمی، پیچیدگی زمانی Big-O، درخت‌ها، گراف‌ها و برنامه‌نویسی پویا.",
+      "description": "پایه و اساس هر برنامه‌نویس حرفه‌ای، درک عمیق ساختمان داده و الگوریتم است. این دوره به صورت کاملا رایگان برای ارتقای سطح علمی جامعه برنامه‌نویسان ایران منتشر شده است.",
+      "thumbnail": "/src/assets/images/course_algorithms_1794952833151.jpg",
+      "previewVideoUrl": "",
+      "price": 0,
+      "discountPrice": 0,
+      "level": "BEGINNER",
+      "duration": "۲۴ ساعت",
+      "prerequisites": "آشنایی اولیه با یک زبان برنامه‌نویسی",
+      "language": "فارسی",
+      "instructorId": "usr_instructor_1",
+      "instructorName": "دکتر کیوان نادری",
+      "instructorTitle": "معمار ارشد نرم‌افزار",
+      "instructorBio": "مدرس دوره‌های مهندسی نرم‌افزار و الگوریتم.",
+      "studentsCount": 3410,
+      "rating": 5,
+      "isPublished": true,
+      "isFeatured": false,
+      "categoryId": "cat_backend",
+      "createdAt": "2026-10-08T09:00:00.000Z",
+      "updatedAt": "2026-11-18T22:30:00.761Z",
+      "chapters": [
+        {
+          "id": "ch_alg_1",
+          "courseId": "crs_algorithms_free",
+          "title": "فصل اول: تحلیل پیچیدگی زمانی و فضایی (Big-O)",
+          "position": 1,
+          "lessons": [
+            {
+              "id": "ls_alg_1",
+              "chapterId": "ch_alg_1",
+              "title": "تحلیل کارایی الگوریتم‌ها و مقایسه ساختارهای حافظه",
+              "duration": "۳۱:۰۰",
+              "videoUrl": "",
+              "isFree": true,
+              "position": 1,
+              "summary": "محاسبه مرتبه زمانی O(1)، O(log n)، O(n) و بهینه‌سازی حلقه‌های تودرتو.",
+              "codeSnippet": "function binarySearch(arr: number[], target: number): number {\n  let left = 0, right = arr.length - 1;\n  while (left <= right) {\n    const mid = Math.floor((left + right) / 2);\n    if (arr[mid] === target) return mid;\n    if (arr[mid] < target) left = mid + 1;\n    else right = mid - 1;\n  }\n  return -1;\n}",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "enrollments": [
+    {
+      "id": "enr_mwmpv087_4f241429b066",
+      "userId": "usr_student_1",
+      "courseId": "crs_nextjs_15",
+      "orderId": "ord_mwmpuxe0_90bac750f3ce",
+      "progressPercent": 0,
+      "createdAt": "2026-11-18T22:52:17.767Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord_mwmpuxe0_90bac750f3ce",
+      "orderNumber": "ORD-727484",
+      "userId": "usr_student_1",
+      "totalAmount": 4800000,
+      "discountAmount": 1350000,
+      "finalAmount": 3450000,
+      "status": "COMPLETED",
+      "paymentRef": "17862733",
+      "couponCode": null,
+      "discountCodeId": null,
+      "items": [
+        {
+          "id": "ori_mwmpuxe0_9a06e2ac8794",
+          "courseId": "crs_nextjs_15",
+          "price": 3450000
+        }
+      ],
+      "createdAt": "2026-11-18T22:52:14.088Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "pay_mwmpuxe1_b178a78df13c",
+      "orderId": "ord_mwmpuxe0_90bac750f3ce",
+      "gateway": "ZARINPAL",
+      "authority": "SBOX_4a6047261b95cd6e5aad3780144955db",
+      "refId": "17862733",
+      "amount": 3450000,
+      "status": "VERIFIED",
+      "rawResponse": {
+        "sandbox": true,
+        "code": 100,
+        "ref_id": "17862733"
+      },
+      "verifiedAt": "2026-11-18T22:52:17.767Z",
+      "createdAt": "2026-11-18T22:52:14.089Z"
+    }
+  ],
+  "discountCodes": [
+    {
+      "id": "cpn_bahar30",
+      "code": "BAHAR30",
+      "type": "PERCENTAGE",
+      "value": 30,
+      "maxUses": 200,
+      "usedCount": 14,
+      "expiresAt": "2027-06-21T23:59:59.000Z",
+      "isActive": true,
+      "createdAt": "2026-11-01T10:00:00.000Z"
+    },
+    {
+      "id": "cpn_welcome500",
+      "code": "WELCOME500",
+      "type": "FIXED",
+      "value": 500000,
+      "maxUses": 100,
+      "usedCount": 8,
+      "expiresAt": "2027-06-21T23:59:59.000Z",
+      "isActive": true,
+      "createdAt": "2026-11-01T10:00:00.000Z"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev_seed_1",
+      "userId": "usr_student_1",
+      "courseId": "crs_nextjs_15",
+      "rating": 5,
+      "comment": "بهترین و عمیق‌ترین دوره Next.js به زبان فارسی! بخش Server Actions و معماری Prisma واقعا دید من رو به فول‌استک عوض کرد.",
+      "status": "APPROVED",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "updatedAt": "2026-11-01T10:00:00.000Z"
+    },
+    {
+      "id": "rev_seed_2",
+      "userId": "usr_admin_1",
+      "courseId": "crs_ai_llm",
+      "rating": 5,
+      "comment": "پروژه‌های عملی بخش LLM و LangChain کاملا منطبق بر نیاز روز شرکت‌هاست.",
+      "status": "APPROVED",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "updatedAt": "2026-11-01T10:00:00.000Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "ntf_mwmpv088_7b90570549f4",
+      "userId": "usr_student_1",
+      "title": "پرداخت موفق و فعال‌سازی دوره‌ها",
+      "message": "سفارش ORD-727484 با کد رهگیری 17862733 تایید شد.",
+      "type": "ORDER",
+      "isRead": false,
+      "link": "/dashboard?tab=enrolled",
+      "createdAt": "2026-11-18T22:52:17.768Z"
+    },
+    {
+      "id": "ntf_mwmptinc_a161ffaeecb1",
+      "userId": "usr_mwmptif7_6a185edad1ad",
+      "title": "به کدآکادمی خوش آمدید!",
+      "message": "حساب کاربری شما با موفقیت ایجاد شد. برای امنیت بیشتر ایمیل خود را تایید کنید.",
+      "type": "AUTH",
+      "isRead": false,
+      "link": "/dashboard?tab=profile",
+      "createdAt": "2026-11-18T22:51:08.328Z"
+    },
+    {
+      "id": "ntf_mwmp83rz_9f8060fe47ac",
+      "userId": "usr_mwmp83rt_f822fad91373",
+      "title": "به کدآکادمی خوش آمدید!",
+      "message": "حساب کاربری شما با موفقیت ایجاد شد. برای امنیت بیشتر ایمیل خود را تایید کنید.",
+      "type": "AUTH",
+      "isRead": false,
+      "link": "/dashboard?tab=profile",
+      "createdAt": "2026-11-18T22:34:29.279Z"
+    },
+    {
+      "id": "ntf_welcome_admin",
+      "userId": "usr_admin_1",
+      "title": "راه‌اندازی بک‌اند Serverless",
+      "message": "پلتفرم کدآکادمی با احراز هویت امن و مستندات Swagger آماده بهره‌برداری است.",
+      "type": "SYSTEM",
+      "isRead": false,
+      "link": "/admin",
+      "createdAt": "2026-11-18T22:30:00.761Z"
+    }
+  ],
+  "settings": {
+    "themePalette": "indigo_slate",
+    "fontFamily": "vazirmatn",
+    "baseFontSize": 16,
+    "headingScale": 1,
+    "lineHeight": 1.65,
+    "borderRadius": "default",
+    "brandPrimaryText": "کد",
+    "brandAccentText": "آکادمی",
+    "siteTitle": "کدآکادمی | پلتفرم جامع آموزش برنامه‌نویسی و بوت‌کمپ‌های تخصصی",
+    "footerTagline": "کدآکادمی، مرجع تخصصی بوت‌کمپ‌ها و دوره‌های مهندسی نرم‌افزار، هوش مصنوعی، امنیت شبکه و کلود با منتورشیپ مستقیم متخصصین ارشد صنعت.",
+    "copyrightText": "© ۱۴۰۵ تمامی حقوق مادی و معنوی برای پلتفرم آموزشی کدآکادمی محفوظ است.",
+    "heroKicker": "ترم جدید بوت‌کمپ‌های تخصصی ۱۴۰۵ · کد تخفیف ۳۰ درصدی: BAHAR30",
+    "heroTitle": "مهندسی نرم‌افزار را در مقیاس شرکت‌های تراز اول تجربه کنید",
+    "heroSubtitle": "آموزش عمیق و ۱۰۰٪ پروژه‌محور برنامه‌نویسی، هوش مصنوعی، معماری بک‌اند و امنیت شبکه به همراه منتورشیپ مستقیم و بازبینی کد.",
+    "featuredCoursesLimit": 9,
+    "showAnnouncementBar": false,
+    "announcementText": "جشنواره بهاری کدآکادمی: ۳۰٪ تخفیف روی تمام بوت‌کمپ‌ها با کد BAHAR30",
+    "announcementLink": "/courses",
+    "showCategoriesSection": true,
+    "showRoadmapsSection": true,
+    "showTestimonialsSection": true,
+    "showTrustBadges": true,
+    "allowRegistration": true,
+    "allowCoupons": true,
+    "allowReviews": true,
+    "showDeveloperInfo": true,
+    "developerName": "مهرشاد روحی",
+    "developerEmail": "mehrshadruhi87@gmail.com",
+    "developerPhone": "09102554874",
+    "developerInstagram": "mehrshad_87r",
+    "developerTelegram": "@otlaw_mehrshad"
+  }
+}

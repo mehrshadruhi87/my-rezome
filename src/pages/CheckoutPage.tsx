@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useRouter } from "../router";
+import React, { useEffect, useState } from "react";
+import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { useStore } from "../store/useStore";
 import { apiRequest } from "../lib/api";
@@ -19,6 +19,7 @@ export function CheckoutPage() {
   const { user, refreshBootstrap } = useAuth();
   const { cart, coupon, clearCart, getCartTotals } = useStore();
   const { push } = useRouter();
+  const searchParams = useSearchParams();
 
   const [stage, setStage] = useState<CheckoutStage>("REVIEW");
   const [submitting, setSubmitting] = useState(false);
@@ -26,6 +27,8 @@ export function CheckoutPage() {
     orderId: string;
     orderNumber: string;
     finalAmount: number;
+    authority?: string;
+    paymentUrl?: string;
   } | null>(null);
   const [receipt, setReceipt] = useState<{
     orderNumber: string;
@@ -38,9 +41,28 @@ export function CheckoutPage() {
   const [expMonth, setExpMonth] = useState("08");
   const [expYear, setExpYear] = useState("07");
 
+  useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    if (paymentStatus === "success") {
+      const orderNumber = searchParams.get("orderNumber") || "";
+      const ref = searchParams.get("ref") || "";
+      const amount = Number(searchParams.get("amount") || 0);
+      clearCart();
+      refreshBootstrap();
+      setReceipt({
+        orderNumber,
+        paymentRef: ref,
+        finalAmount: amount,
+      });
+      setStage("RECEIPT");
+    } else if (paymentStatus === "failed") {
+      setStage("FAILED");
+    }
+  }, [searchParams]);
+
   const totals = getCartTotals();
 
-  if (!user) {
+  if (!user && stage === "REVIEW") {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 text-center">
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 space-y-4">
@@ -170,6 +192,10 @@ export function CheckoutPage() {
         orderId: string;
         orderNumber: string;
         finalAmount: number;
+        requiresGateway?: boolean;
+        authority?: string;
+        paymentUrl?: string;
+        sandboxSimulated?: boolean;
       }>("/api/checkout/initiate", {
         method: "POST",
         body: JSON.stringify({
@@ -195,6 +221,8 @@ export function CheckoutPage() {
           finalAmount: 0,
         });
         setStage("RECEIPT");
+      } else if (res.paymentUrl && !res.sandboxSimulated) {
+        window.location.href = res.paymentUrl;
       } else {
         setStage("GATEWAY");
       }
@@ -215,7 +243,11 @@ export function CheckoutPage() {
         paymentRef?: string;
       }>("/api/checkout/verify", {
         method: "POST",
-        body: JSON.stringify({ orderId: pendingOrder.orderId, status }),
+        body: JSON.stringify({
+          orderId: pendingOrder.orderId,
+          authority: pendingOrder.authority,
+          status,
+        }),
       });
       if (res.success && res.paymentRef) {
         clearCart();
@@ -377,8 +409,8 @@ export function CheckoutPage() {
             مشخصات خریدار و دوره‌ها
           </h2>
           <div className="text-xs text-slate-300 space-y-1">
-            <div>نام و نام خانوادگی: {user.name}</div>
-            <div className="text-slate-400">ایمیل دسترسی: {user.email}</div>
+            <div>نام و نام خانوادگی: {user?.name || "کاربر"}</div>
+            <div className="text-slate-400">ایمیل دسترسی: {user?.email || ""}</div>
           </div>
 
           <div className="divide-y divide-slate-800/80 pt-2">

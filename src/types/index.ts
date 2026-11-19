@@ -1,10 +1,15 @@
-export type UserRole = "ADMIN" | "STUDENT";
+export type UserRole = "ADMIN" | "INSTRUCTOR" | "STUDENT";
 
 export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "ALL_LEVELS";
 
 export type DiscountType = "PERCENTAGE" | "FIXED";
 
-export type OrderStatus = "PENDING" | "COMPLETED" | "FAILED";
+export type OrderStatus =
+  | "PENDING"
+  | "COMPLETED"
+  | "FAILED"
+  | "REFUNDED"
+  | "CANCELLED";
 
 export interface PublicUser {
   id: string;
@@ -13,6 +18,10 @@ export interface PublicUser {
   role: UserRole;
   phone: string | null;
   bio: string | null;
+  avatarUrl?: string | null;
+  isEmailVerified?: boolean;
+  isPhoneVerified?: boolean;
+  isActive?: boolean;
   createdAt: string;
 }
 
@@ -25,6 +34,16 @@ export interface CategoryItem {
   coursesCount?: number;
 }
 
+export interface LessonAttachmentItem {
+  id: string;
+  lessonId: string;
+  title: string;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+}
+
 export interface LessonItem {
   id: string;
   title: string;
@@ -34,6 +53,7 @@ export interface LessonItem {
   position: number;
   summary?: string;
   codeSnippet?: string;
+  attachments?: LessonAttachmentItem[];
 }
 
 export interface ChapterItem {
@@ -47,9 +67,11 @@ export interface ReviewItem {
   id: string;
   rating: number;
   comment: string;
+  status?: "PENDING" | "APPROVED" | "REJECTED";
   userId: string;
   userName: string;
   courseId: string;
+  courseTitle?: string;
   createdAt: string;
 }
 
@@ -63,6 +85,7 @@ export interface CourseSummary {
   discountPrice: number | null;
   level: CourseLevel;
   duration: string;
+  instructorId?: string | null;
   instructorName: string;
   instructorTitle: string;
   studentsCount: number;

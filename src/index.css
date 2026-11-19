@@ -2,18 +2,38 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  color-scheme: dark;
-  --site-bg: #0f172a;
+  color-scheme: light;
+  --site-bg: #f8fafc;
+  --site-text: #0f172a;
   --site-line-height: 1.65;
   --font-sans: "Vazirmatn", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --accent-300: #93c5fd;
+  --accent-400: #60a5fa;
+  --accent-500: #3b82f6;
+  --accent-600: #2563eb;
+  --accent-700: #1d4ed8;
+  --accent-rgb: 59 130 246;
+  --accent-secondary-rgb: 56 189 248;
+  --motion-scale: 1;
+}
+
+html.dark {
+  color-scheme: dark;
+  --site-bg: #070b14;
+  --site-text: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background-color: var(--site-bg);
-  color: #f8fafc;
+  color: var(--site-text);
   font-family: var(--font-sans);
   line-height: var(--site-line-height);
+  transition: background-color 220ms ease, color 220ms ease;
 }
 
 .font-mono,
@@ -26,6 +46,202 @@ pre {
   font-variant-numeric: tabular-nums;
 }
 
+/* Cyber-Minimal Mesh Gradient Orbs */
+.cyber-mesh-bg {
+  overflow: hidden;
+  background:
+    radial-gradient(
+      62% 52% at 15% 18%,
+      rgb(var(--accent-rgb) / 0.14),
+      transparent 70%
+    ),
+    radial-gradient(
+      55% 48% at 88% 22%,
+      rgb(var(--accent-secondary-rgb) / 0.12),
+      transparent 72%
+    ),
+    radial-gradient(
+      50% 45% at 50% 90%,
+      rgb(var(--accent-rgb) / 0.08),
+      transparent 70%
+    );
+}
+
+html.dark .cyber-mesh-bg {
+  background:
+    radial-gradient(
+      65% 55% at 18% 18%,
+      rgb(var(--accent-rgb) / 0.22),
+      transparent 70%
+    ),
+    radial-gradient(
+      58% 50% at 84% 24%,
+      rgb(var(--accent-secondary-rgb) / 0.18),
+      transparent 72%
+    ),
+    radial-gradient(
+      52% 48% at 52% 92%,
+      rgb(var(--accent-rgb) / 0.12),
+      transparent 70%
+    );
+}
+
+.cyber-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  will-change: transform;
+  animation: cyberOrbFloat calc(16s * var(--motion-scale, 1)) ease-in-out
+    infinite alternate;
+}
+
+.cyber-orb-1 {
+  top: -10%;
+  right: 8%;
+  width: 24rem;
+  height: 24rem;
+  background: rgb(var(--accent-rgb) / 0.2);
+}
+
+.cyber-orb-2 {
+  bottom: -14%;
+  left: 6%;
+  width: 26rem;
+  height: 26rem;
+  background: rgb(var(--accent-secondary-rgb) / 0.18);
+  animation-duration: calc(21s * var(--motion-scale, 1));
+  animation-direction: alternate-reverse;
+}
+
+.cyber-orb-3 {
+  top: 38%;
+  left: 42%;
+  width: 18rem;
+  height: 18rem;
+  background: rgb(var(--accent-rgb) / 0.12);
+  animation-duration: calc(18s * var(--motion-scale, 1));
+}
+
+/* Subtle Neon Perspective / Ortho Grid */
+.cyber-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      rgb(var(--accent-rgb) / 0.1) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      rgb(var(--accent-rgb) / 0.1) 1px,
+      transparent 1px
+    );
+  background-size: 46px 46px;
+  mask-image: radial-gradient(
+    ellipse 80% 72% at 50% 42%,
+    #000 35%,
+    transparent 100%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 72% at 50% 42%,
+    #000 35%,
+    transparent 100%
+  );
+}
+
+html.dark .cyber-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      rgb(var(--accent-rgb) / 0.14) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      rgb(var(--accent-rgb) / 0.14) 1px,
+      transparent 1px
+    );
+}
+
+/* Glassmorphism Surface */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+html.dark .glass-surface {
+  background: rgba(11, 17, 32, 0.68);
+}
+
+/* Hover Glow Cards & Buttons */
+.cyber-glow-card {
+  transition:
+    transform calc(240ms * var(--motion-scale, 1)) cubic-bezier(0.22, 1, 0.36, 1),
+    border-color calc(220ms * var(--motion-scale, 1)) ease,
+    box-shadow calc(260ms * var(--motion-scale, 1)) ease;
+}
+
+.cyber-glow-card:hover {
+  border-color: rgb(var(--accent-rgb) / 0.48);
+  box-shadow:
+    0 18px 40px -18px rgb(var(--accent-rgb) / 0.28),
+    0 0 0 1px rgb(var(--accent-rgb) / 0.15);
+}
+
+.cyber-btn-glow {
+  transition:
+    transform calc(180ms * var(--motion-scale, 1)) ease,
+    box-shadow calc(220ms * var(--motion-scale, 1)) ease,
+    background-color 180ms ease;
+}
+
+.cyber-btn-glow:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px -6px rgb(var(--accent-rgb) / 0.45);
+}
+
+.cyber-caret {
+  animation: cyberCaretBlink 900ms steps(2, start) infinite;
+}
+
+@keyframes cyberOrbFloat {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, -18px, 0) scale(1.07);
+  }
+  100% {
+    transform: translate3d(-20px, 16px, 0) scale(0.96);
+  }
+}
+
+@keyframes cyberCaretBlink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+html[data-motion-speed="off"] .cyber-orb,
+html[data-motion-speed="off"] .cyber-caret {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .cyber-orb,
+  .cyber-caret {
+    animation: none !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -36,10 +252,14 @@ pre {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-slate-700, #334155);
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-indigo-600, #4f46e5);
+  background: var(--accent-600);
 }

@@ -19,28 +19,37 @@ import type {
   CourseSummary,
   DiscountCodeItem,
   OrderRecord,
+  OrderStatus,
   PublicUser,
+  ReviewItem,
 } from "../types";
 import { toast } from "sonner";
 import {
   BookOpen,
+  CheckCircle2,
   Copy,
   Edit3,
   FolderTree,
   LayoutDashboard,
+  MessageSquare,
   Plus,
+  Receipt,
   Settings,
   ShieldAlert,
   Tag,
   Trash2,
+  Upload,
   Users,
   X,
+  XCircle,
 } from "lucide-react";
 import { AdminSettingsTab } from "../components/admin/AdminSettingsTab";
 
 type AdminTab =
   | "overview"
   | "courses"
+  | "orders"
+  | "reviews"
   | "categories"
   | "coupons"
   | "users"
@@ -77,14 +86,22 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
 
   const [stats, setStats] = useState({
-    totalRevenue: 0,
+    totalUsers: 0,
     totalStudents: 0,
+    totalInstructors: 0,
     publishedCourses: 0,
     totalCourses: 0,
+    totalOrdersCount: 0,
     completedOrdersCount: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0,
     totalEnrollments: 0,
+    pendingReviewsCount: 0,
   });
   const [recentOrders, setRecentOrders] = useState<OrderRecord[]>([]);
+  const [recentRegistrations, setRecentRegistrations] = useState<PublicUser[]>([]);
+  const [allOrders, setAllOrders] = useState<OrderRecord[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [coupons, setCoupons] = useState<DiscountCodeItem[]>([]);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
@@ -92,6 +109,7 @@ export function AdminPage() {
   // Course Editor Modal
   const [courseModalOpen, setCourseModalOpen] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [courseForm, setCourseForm] = useState<CourseFormState | null>(null);
 
   // Category Form
@@ -115,19 +133,27 @@ export function AdminPage() {
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [overviewRes, coursesRes, couponsRes, usersRes] = await Promise.all([
-        apiRequest<{ stats: typeof stats; recentOrders: OrderRecord[] }>(
-          "/api/admin/overview"
-        ),
-        apiRequest<{ courses: CourseSummary[] }>(
-          "/api/courses?includeUnpublished=true"
-        ),
-        apiRequest<{ coupons: DiscountCodeItem[] }>("/api/admin/coupons"),
-        apiRequest<{ users: AdminUserRow[] }>("/api/admin/users"),
-      ]);
+      const [overviewRes, coursesRes, ordersRes, reviewsRes, couponsRes, usersRes] =
+        await Promise.all([
+          apiRequest<{
+            stats: typeof stats;
+            recentOrders: OrderRecord[];
+            recentRegistrations?: PublicUser[];
+          }>("/api/admin/overview"),
+          apiRequest<{ courses: CourseSummary[] }>(
+            "/api/courses?includeUnpublished=true&limit=100"
+          ),
+          apiRequest<{ orders: OrderRecord[] }>("/api/admin/orders?limit=50"),
+          apiRequest<{ reviews: ReviewItem[] }>("/api/admin/reviews?limit=50"),
+          apiRequest<{ coupons: DiscountCodeItem[] }>("/api/admin/coupons"),
+          apiRequest<{ users: AdminUserRow[] }>("/api/admin/users?limit=100"),
+        ]);
       setStats(overviewRes.stats);
       setRecentOrders(overviewRes.recentOrders);
+      setRecentRegistrations(overviewRes.recentRegistrations || []);
       setCourses(coursesRes.courses);
+      setAllOrders(ordersRes.orders);
+      setReviews(reviewsRes.reviews);
       setCoupons(couponsRes.coupons);
       setUsers(usersRes.users);
     } catch (err) {
@@ -366,7 +392,10 @@ export function AdminPage() {
     }
   };
 
-  const handleToggleRole = async (userId: string, nextRole: "ADMIN" | "STUDENT") => {
+  const handleToggleRole = async (
+    userId: string,
+    nextRole: "ADMIN" | "INSTRUCTOR" | "STUDENT"
+  ) => {
     try {
       await apiRequest(`/api/admin/users/${userId}/role`, {
         method: "PATCH",
@@ -376,6 +405,80 @@ export function AdminPage() {
       await loadAdminData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "خطا");
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, isActive: boolean) => {
+    try {
+      await apiRequest(`/api/admin/users/${userId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+      toast.success(isActive ? "حساب کاربر فعال شد." : "حساب کاربر مسدود شد.");
+      await loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در تغییر وضعیت کاربر");
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    try {
+      await apiRequest(`/api/admin/orders/${orderId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast.success("وضعیت سفارش به‌روزرسانی شد.");
+      await loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در تغییر وضعیت سفارش");
+    }
+  };
+
+  const handleModerateReview = async (
+    reviewId: string,
+    status: "APPROVED" | "REJECTED"
+  ) => {
+    try {
+      await apiRequest(`/api/admin/reviews/${reviewId}/moderate`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast.success(
+        status === "APPROVED" ? "دیدگاه تایید و منتشر شد." : "دیدگاه رد شد."
+      );
+      await loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در بررسی دیدگاه");
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      await apiRequest(`/api/reviews/${reviewId}`, { method: "DELETE" });
+      toast.success("دیدگاه حذف شد.");
+      await loadAdminData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در حذف دیدگاه");
+    }
+  };
+
+  const handleThumbnailUpload = async (file: File) => {
+    if (!courseForm) return;
+    setUploadingThumbnail(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "courses");
+      const res = await apiRequest<{ url: string }>("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+      setCourseForm({ ...courseForm, thumbnail: res.url });
+      toast.success("تصویر کاور با موفقیت آپلود شد.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در آپلود تصویر");
+    } finally {
+      setUploadingThumbnail(false);
     }
   };
 
@@ -418,8 +521,10 @@ export function AdminPage() {
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2">
         {[
-          { id: "overview" as const, label: "نمای کلی و سفارش‌ها", icon: LayoutDashboard },
+          { id: "overview" as const, label: "نمای کلی", icon: LayoutDashboard },
           { id: "courses" as const, label: "دوره‌ها و سرفصل‌ها", icon: BookOpen },
+          { id: "orders" as const, label: "سفارش‌ها", icon: Receipt },
+          { id: "reviews" as const, label: "دیدگاه‌ها", icon: MessageSquare },
           { id: "categories" as const, label: "دسته‌بندی‌ها", icon: FolderTree },
           { id: "coupons" as const, label: "کدهای تخفیف", icon: Tag },
           { id: "users" as const, label: "کاربران و دسترسی‌ها", icon: Users },
@@ -458,24 +563,37 @@ export function AdminPage() {
                   <div className="mt-2 text-xl font-black text-emerald-400">
                     {formatToman(stats.totalRevenue)}
                   </div>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5">
-                  <div className="text-xs text-slate-400">تعداد سفارش‌های موفق</div>
-                  <div className="mt-2 text-xl font-black text-white">
-                    {toPersianDigits(stats.completedOrdersCount)} سفارش
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    این ماه: {formatToman(stats.monthlyRevenue)}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5">
-                  <div className="text-xs text-slate-400">دوره‌های منتشرشده</div>
+                  <div className="text-xs text-slate-400">تعداد سفارش‌ها</div>
+                  <div className="mt-2 text-xl font-black text-white">
+                    {toPersianDigits(stats.completedOrdersCount)} موفق
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    از کل {toPersianDigits(stats.totalOrdersCount)} سفارش
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5">
+                  <div className="text-xs text-slate-400">کاربران پلتفرم</div>
                   <div className="mt-2 text-xl font-black text-indigo-400">
-                    {toPersianDigits(stats.publishedCourses)} از{" "}
-                    {toPersianDigits(stats.totalCourses)}
+                    {toPersianDigits(stats.totalUsers)} کاربر
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {toPersianDigits(stats.totalStudents)} دانشجو ·{" "}
+                    {toPersianDigits(stats.totalInstructors)} مدرس
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/75 p-5">
-                  <div className="text-xs text-slate-400">کل ثبت‌نام‌های فعال</div>
+                  <div className="text-xs text-slate-400">دوره‌ها و ثبت‌نام‌ها</div>
                   <div className="mt-2 text-xl font-black text-white">
-                    {toPersianDigits(stats.totalEnrollments)} دسترسی
+                    {toPersianDigits(stats.publishedCourses)} از{" "}
+                    {toPersianDigits(stats.totalCourses)} دوره
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {toPersianDigits(stats.totalEnrollments)} دسترسی فعال
                   </div>
                 </div>
               </div>
@@ -535,6 +653,42 @@ export function AdminPage() {
                   </tbody>
                 </table>
               </div>
+
+              {recentRegistrations.length > 0 && (
+                <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70">
+                  <div className="border-b border-slate-800 px-5 py-3.5 text-sm font-bold text-white">
+                    آخرین ثبت‌نام‌ها
+                  </div>
+                  <table className="w-full text-right text-xs">
+                    <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3">نام</th>
+                        <th className="px-4 py-3">ایمیل</th>
+                        <th className="px-4 py-3">نقش</th>
+                        <th className="px-4 py-3">تاریخ عضویت</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/70">
+                      {recentRegistrations.map((u) => (
+                        <tr key={u.id} className="hover:bg-slate-800/30">
+                          <td className="px-4 py-3 font-bold text-white">{u.name}</td>
+                          <td className="px-4 py-3 font-mono text-slate-400">{u.email}</td>
+                          <td className="px-4 py-3 text-indigo-400 font-semibold">
+                            {u.role === "ADMIN"
+                              ? "مدیر"
+                              : u.role === "INSTRUCTOR"
+                              ? "مدرس"
+                              : "دانشجو"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">
+                            {formatPersianDate(u.createdAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -604,6 +758,148 @@ export function AdminPage() {
                             type="button"
                             aria-label={`حذف ${c.title}`}
                             onClick={() => handleDeleteCourse(c.id)}
+                            className="rounded-lg border border-slate-700 p-1.5 text-slate-300 hover:border-rose-500 hover:text-rose-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 2.5 ORDERS */}
+          {activeTab === "orders" && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70">
+              <table className="w-full text-right text-xs">
+                <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3.5">شماره سفارش</th>
+                    <th className="px-4 py-3.5">کاربر</th>
+                    <th className="px-4 py-3.5">دوره‌ها</th>
+                    <th className="px-4 py-3.5">مبلغ نهایی</th>
+                    <th className="px-4 py-3.5">کد رهگیری</th>
+                    <th className="px-4 py-3.5">وضعیت سفارش</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 tabular-nums">
+                  {allOrders.map((ord) => (
+                    <tr key={ord.id} className="hover:bg-slate-800/30">
+                      <td className="px-4 py-3.5 font-mono font-bold text-white">
+                        {ord.orderNumber}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-300">
+                        <div>{ord.userName}</div>
+                        <div className="text-[11px] font-mono text-slate-500">
+                          {ord.userEmail}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-300 max-w-xs truncate">
+                        {ord.items.map((i) => i.courseTitle).join("، ")}
+                      </td>
+                      <td className="px-4 py-3.5 font-bold text-emerald-400">
+                        {formatToman(ord.finalAmount)}
+                      </td>
+                      <td className="px-4 py-3.5 font-mono text-slate-400">
+                        {ord.paymentRef || "—"}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <select
+                          aria-label={`وضعیت سفارش ${ord.orderNumber}`}
+                          value={ord.status}
+                          onChange={(e) =>
+                            handleUpdateOrderStatus(
+                              ord.id,
+                              e.target.value as OrderStatus
+                            )
+                          }
+                          className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-white"
+                        >
+                          <option value="PENDING">در انتظار</option>
+                          <option value="COMPLETED">پرداخت موفق</option>
+                          <option value="FAILED">ناموفق</option>
+                          <option value="REFUNDED">مرجوع‌شده</option>
+                          <option value="CANCELLED">لغو‌شده</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 2.6 REVIEWS MODERATION */}
+          {activeTab === "reviews" && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70">
+              <table className="w-full text-right text-xs">
+                <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3.5">کاربر</th>
+                    <th className="px-4 py-3.5">دوره</th>
+                    <th className="px-4 py-3.5">امتیاز</th>
+                    <th className="px-4 py-3.5">متن دیدگاه</th>
+                    <th className="px-4 py-3.5">وضعیت</th>
+                    <th className="px-4 py-3.5">عملیات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 tabular-nums">
+                  {reviews.map((rev) => (
+                    <tr key={rev.id} className="hover:bg-slate-800/30">
+                      <td className="px-4 py-3.5 font-bold text-white">
+                        {rev.userName}
+                      </td>
+                      <td className="px-4 py-3.5 text-indigo-400 max-w-[180px] truncate">
+                        {rev.courseTitle || rev.courseId}
+                      </td>
+                      <td className="px-4 py-3.5 text-amber-400 font-bold">
+                        {toPersianDigits(rev.rating)} / ۵
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-300 max-w-sm">
+                        {rev.comment}
+                      </td>
+                      <td className="px-4 py-3.5 font-bold">
+                        <span
+                          className={
+                            rev.status === "APPROVED"
+                              ? "text-emerald-400"
+                              : rev.status === "REJECTED"
+                              ? "text-rose-400"
+                              : "text-amber-400"
+                          }
+                        >
+                          {rev.status === "APPROVED"
+                            ? "تاییدشده"
+                            : rev.status === "REJECTED"
+                            ? "ردشده"
+                            : "در انتظار"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            aria-label="تایید دیدگاه"
+                            onClick={() => handleModerateReview(rev.id, "APPROVED")}
+                            className="rounded-lg border border-slate-700 p-1.5 text-emerald-400 hover:border-emerald-500"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="رد دیدگاه"
+                            onClick={() => handleModerateReview(rev.id, "REJECTED")}
+                            className="rounded-lg border border-slate-700 p-1.5 text-amber-400 hover:border-amber-500"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="حذف دیدگاه"
+                            onClick={() => handleDeleteReview(rev.id)}
                             className="rounded-lg border border-slate-700 p-1.5 text-slate-300 hover:border-rose-500 hover:text-rose-400"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -879,6 +1175,7 @@ export function AdminPage() {
                     <th className="px-4 py-3.5">نام کاربر</th>
                     <th className="px-4 py-3.5">ایمیل</th>
                     <th className="px-4 py-3.5">نقش</th>
+                    <th className="px-4 py-3.5">وضعیت حساب</th>
                     <th className="px-4 py-3.5">دوره‌های فعال</th>
                     <th className="px-4 py-3.5">اعطای دستی دسترسی دوره</th>
                   </tr>
@@ -899,14 +1196,30 @@ export function AdminPage() {
                           onChange={(e) =>
                             handleToggleRole(
                               u.id,
-                              e.target.value as "ADMIN" | "STUDENT"
+                              e.target.value as "ADMIN" | "INSTRUCTOR" | "STUDENT"
                             )
                           }
                           className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-white"
                         >
                           <option value="STUDENT">دانشجو</option>
+                          <option value="INSTRUCTOR">مدرس</option>
                           <option value="ADMIN">مدیر سیستم</option>
                         </select>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleToggleUserStatus(u.id, u.isActive === false)
+                          }
+                          className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${
+                            u.isActive !== false
+                              ? "bg-emerald-500/15 text-emerald-400"
+                              : "bg-rose-500/15 text-rose-400"
+                          }`}
+                        >
+                          {u.isActive !== false ? "فعال" : "مسدود"}
+                        </button>
                       </td>
                       <td className="px-4 py-3.5 text-emerald-400 font-bold">
                         {toPersianDigits(u.enrolledCourseIds.length)} دوره
@@ -1148,48 +1461,67 @@ export function AdminPage() {
                       }}
                       className="h-14 w-24 rounded-xl object-cover border border-slate-800 bg-slate-950 shrink-0"
                     />
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <select
-                        id="course-thumbnail-preset"
-                        value={
-                          COURSE_THUMBNAIL_PRESETS.some(
-                            (p) => p.legacyPath === courseForm.thumbnail
-                          )
-                            ? courseForm.thumbnail
-                            : "custom"
-                        }
-                        onChange={(e) => {
-                          if (e.target.value !== "custom") {
+                    <div className="flex-1 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <select
+                          id="course-thumbnail-preset"
+                          value={
+                            COURSE_THUMBNAIL_PRESETS.some(
+                              (p) => p.legacyPath === courseForm.thumbnail
+                            )
+                              ? courseForm.thumbnail
+                              : "custom"
+                          }
+                          onChange={(e) => {
+                            if (e.target.value !== "custom") {
+                              setCourseForm({
+                                ...courseForm,
+                                thumbnail: e.target.value,
+                              });
+                            }
+                          }}
+                          className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white"
+                        >
+                          {COURSE_THUMBNAIL_PRESETS.map((preset) => (
+                            <option key={preset.id} value={preset.legacyPath}>
+                              طرح آماده: {preset.label}
+                            </option>
+                          ))}
+                          <option value="custom">آدرس تصویر دلخواه</option>
+                        </select>
+                        <input
+                          id="course-thumbnail-url"
+                          type="text"
+                          dir="ltr"
+                          aria-label="آدرس تصویر کاور دوره"
+                          value={courseForm.thumbnail}
+                          onChange={(e) =>
                             setCourseForm({
                               ...courseForm,
                               thumbnail: e.target.value,
-                            });
+                            })
                           }
-                        }}
-                        className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white"
-                      >
-                        {COURSE_THUMBNAIL_PRESETS.map((preset) => (
-                          <option key={preset.id} value={preset.legacyPath}>
-                            طرح آماده: {preset.label}
-                          </option>
-                        ))}
-                        <option value="custom">آدرس تصویر دلخواه</option>
-                      </select>
-                      <input
-                        id="course-thumbnail-url"
-                        type="text"
-                        dir="ltr"
-                        aria-label="آدرس تصویر کاور دوره"
-                        value={courseForm.thumbnail}
-                        onChange={(e) =>
-                          setCourseForm({
-                            ...courseForm,
-                            thumbnail: e.target.value,
-                          })
-                        }
-                        placeholder="https://..."
-                        className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white font-mono"
-                      />
+                          placeholder="https://..."
+                          className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white font-mono"
+                        />
+                      </div>
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-indigo-300 hover:border-indigo-500">
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>
+                          {uploadingThumbnail ? "در حال آپلود..." : "آپلود فایل تصویر کاور"}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={uploadingThumbnail}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleThumbnailUpload(file);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
                 </div>

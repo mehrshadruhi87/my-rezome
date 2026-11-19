@@ -15,6 +15,26 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&family=Readex+Pro:wght@400;500;600;700&family=Rubik:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("codeacademy_user_prefs_v1");
+          if (!raw) return;
+          var prefs = JSON.parse(raw);
+          var root = document.documentElement;
+          if (prefs && prefs.mode === "light") {
+            root.classList.remove("dark");
+            root.style.colorScheme = "light";
+          } else {
+            root.classList.add("dark");
+            root.style.colorScheme = "dark";
+          }
+          if (prefs && typeof prefs.fontSize === "number") {
+            root.style.fontSize = Math.min(19, Math.max(14, prefs.fontSize)) + "px";
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

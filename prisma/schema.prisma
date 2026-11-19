@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  INITIATED
+  VERIFIED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VerificationPurpose {
+  EMAIL_VERIFY
+  PHONE_VERIFY
+  PASSWORD_RESET
+}
+
+enum NotificationType {
+  SYSTEM
+  ORDER
+  COURSE
+  REVIEW
+  AUTH
+}
+
+model User {
+  id              String   @id @default(cuid())
+  name            String
+  email           String   @unique
+  phone           String?
+  bio             String?
+  avatarUrl       String?
+  role            UserRole @default(STUDENT)
+  passwordHash    String
+  isEmailVerified Boolean  @default(false)
+  isPhoneVerified Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+  coursesTaught      Course[]            @relation("CourseInstructor")
+  enrollments        Enrollment[]
+  orders             Order[]
+  reviews            Review[]
+  notifications      Notification[]
+}
+
+model Session {
+  id               String    @id
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  id         String              @id @default(cuid())
+  userId     String
+  purpose    VerificationPurpose
+  target     String
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  icon        String   @default("Code2")
+  description String?
+  courses     Course[]
+}
+
+model Course {
+  id              String      @id @default(cuid())
+  title           String
+  slug            String      @unique
+  shortDesc       String
+  description     String
+  thumbnail       String
+  previewVideoUrl String      @default("")
+  price           Int
+  discountPrice   Int?
+  level           CourseLevel @default(ALL_LEVELS)
+  duration        String
+  prerequisites   String      @default("")
+  language        String      @default("فارسی")
+  instructorId    String?
+  instructorName  String
+  instructorTitle String
+  instructorBio   String      @default("")
+  studentsCount   Int         @default(0)
+  rating          Float       @default(5.0)
+  isPublished     Boolean     @default(false)
+  isFeatured      Boolean     @default(false)
+  categoryId      String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  instructor  User?        @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  category    Category     @relation(fields: [categoryId], references: [id])
+  chapters    Chapter[]
+  enrollments Enrollment[]
+  orderItems  OrderItem[]
+  reviews     Review[]
+
+  @@index([categoryId])
+  @@index([isPublished, isFeatured])
+  @@index([instructorId])
+}
+
+model Chapter {
+  id       String   @id @default(cuid())
+  courseId String
+  title    String
+  position Int      @default(1)
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons  Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String             @id @default(cuid())
+  chapterId   String
+  title       String
+  duration    String
+  videoUrl    String             @default("")
+  isFree      Boolean            @default(false)
+  position    Int                @default(1)
+  summary     String             @default("")
+  codeSnippet String             @default("")
+  chapter     Chapter            @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  attachments LessonAttachment[]
+
+  @@index([chapterId])
+}
+
+model LessonAttachment {
+  id        String   @id @default(cuid())
+  lessonId  String
+  title     String
+  fileUrl   String
+  fileType  String
+  fileSize  Int
+  createdAt DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+model Enrollment {
+  id              String   @id @default(cuid())
+  userId          String
+  courseId        String
+  orderId         String?
+  progressPercent Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+model DiscountCode {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  type      DiscountType
+  value     Int
+  maxUses   Int          @default(100)
+  usedCount Int          @default(0)
+  expiresAt DateTime?
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  orders    Order[]
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique
+  userId         String
+  totalAmount    Int
+  discountAmount Int         @default(0)
+  finalAmount    Int
+  status         OrderStatus @default(PENDING)
+  paymentRef     String?
+  couponCode     String?
+  discountCodeId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discountCode DiscountCode?        @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
+  items        OrderItem[]
+  transactions PaymentTransaction[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  orderId  String
+  courseId String
+  price    Int
+
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([courseId])
+}
+
+model PaymentTransaction {
+  id          String        @id @default(cuid())
+  orderId     String
+  gateway     String
+  authority   String?       @unique
+  refId       String?
+  amount      Int
+  status      PaymentStatus @default(INITIATED)
+  rawResponse Json?
+  verifiedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  userId    String
+  courseId  String
+  rating    Int
+  comment   String
+  status    ReviewStatus @default(APPROVED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId, status])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model PlatformSetting {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}

@@ -2,6 +2,10 @@ import React from "react";
 import { Toaster } from "sonner";
 import { Link, RouterProvider, useRouter } from "./router";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import {
+  UserPreferencesProvider,
+  useUserPreferences,
+} from "./context/UserPreferencesContext";
 import { Header } from "./components/layout/Header";
 import { CartDrawer } from "./components/layout/CartDrawer";
 import { Footer } from "./components/layout/Footer";
@@ -53,14 +57,15 @@ function AppRoutes() {
 
 function AppShell() {
   const { settings } = useAuth();
+  const { prefs } = useUserPreferences();
 
   return (
     <div
       dir="rtl"
-      className="min-h-screen flex flex-col bg-[var(--site-bg,#0f172a)] text-slate-100 antialiased selection:bg-indigo-500 selection:text-white"
+      className="min-h-screen flex flex-col bg-[var(--site-bg)] text-slate-900 dark:text-slate-100 antialiased selection:bg-[var(--accent-500)] selection:text-white"
     >
       {settings.showAnnouncementBar && settings.announcementText.trim() && (
-        <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold text-white">
+        <div className="bg-[var(--accent-600)] px-4 py-2 text-center text-xs font-bold text-white">
           {settings.announcementLink ? (
             <Link
               href={settings.announcementLink}
@@ -82,14 +87,11 @@ function AppShell() {
       <Toaster
         position="bottom-left"
         dir="rtl"
-        theme="dark"
+        theme={prefs.mode}
         richColors
         toastOptions={{
           style: {
             fontFamily: "var(--font-sans)",
-            background: "var(--site-bg, #0F172A)",
-            border: "1px solid var(--color-slate-800, #1E293B)",
-            color: "#F8FAFC",
           },
         }}
       />
@@ -101,7 +103,9 @@ export default function App() {
   return (
     <RouterProvider>
       <AuthProvider>
-        <AppShell />
+        <UserPreferencesProvider>
+          <AppShell />
+        </UserPreferencesProvider>
       </AuthProvider>
     </RouterProvider>
   );

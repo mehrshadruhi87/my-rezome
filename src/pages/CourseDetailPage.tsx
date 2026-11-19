@@ -199,10 +199,10 @@ export function CourseDetailPage({ slug }: { slug: string }) {
         </Link>
         <span>/</span>
         <Link
-          href={`/courses?category=${course.category.slug}`}
+          href={`/courses?category=${course.category?.slug ?? "all"}`}
           className="hover:text-white"
         >
-          {course.category.name}
+          {course.category?.name ?? "دوره‌ها"}
         </Link>
         <span>/</span>
         <span className="text-slate-200 truncate">{course.title}</span>

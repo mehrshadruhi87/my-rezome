@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { useStore } from "../store/useStore";
-import { apiRequest, getAuthToken } from "../lib/api";
+import { ApiError, apiRequest } from "../lib/api";
 import {
   formatPersianDate,
   formatToman,
@@ -16,14 +16,29 @@ import type { CourseSummary, OrderRecord, PublicUser } from "../types";
 import { toast } from "sonner";
 import {
   BookOpen,
+  CheckCircle2,
   Heart,
+  KeyRound,
+  Laptop,
+  LogOut,
+  Mail,
   PlayCircle,
   Receipt,
   ShieldAlert,
+  ShieldCheck,
   ShoppingCart,
   Trash2,
   User,
 } from "lucide-react";
+
+interface SessionSummary {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  expiresAt: string;
+  createdAt: string;
+  isCurrent: boolean;
+}
 
 interface EnrolledCourse extends CourseSummary {
   chaptersCount: number;
@@ -52,12 +67,41 @@ export function DashboardPage() {
   const [profileBio, setProfileBio] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // Email Verification
+  const [verifyOtpSent, setVerifyOtpSent] = useState(false);
+  const [verifyOtpCode, setVerifyOtpCode] = useState("");
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+
+  // Password Change
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Active Sessions
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
   useEffect(() => {
     const t = searchParams.get("tab");
     if (t === "enrolled" || t === "wishlist" || t === "orders" || t === "profile") {
       setActiveTab(t);
     }
   }, [searchParams]);
+
+  const loadSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await apiRequest<{ sessions: SessionSummary[] }>(
+        "/api/auth/sessions"
+      );
+      setSessions(res.sessions || []);
+    } catch {
+      setSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -81,7 +125,7 @@ export function DashboardPage() {
         toast.error(
           err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات پنل"
         );
-        if (!getAuthToken()) {
+        if (err instanceof ApiError && err.status === 401) {
           setUser(null);
         }
       })
@@ -92,6 +136,12 @@ export function DashboardPage() {
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (user && activeTab === "profile") {
+      loadSessions();
+    }
+  }, [user, activeTab]);
 
   if (authLoading) {
     return (
@@ -144,11 +194,100 @@ export function DashboardPage() {
     }
   };
 
+  const handleRequestEmailVerify = async () => {
+    setVerifyingEmail(true);
+    try {
+      const res = await apiRequest<{ sentTo: string; devOtpPreview?: string }>(
+        "/api/auth/verify/request",
+        {
+          method: "POST",
+          body: JSON.stringify({ channel: "email" }),
+        }
+      );
+      setVerifyOtpSent(true);
+      if (res.devOtpPreview) {
+        setDevOtpHint(res.devOtpPreview);
+      }
+      toast.success("کد تایید به ایمیل شما ارسال شد.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در ارسال کد تایید");
+    } finally {
+      setVerifyingEmail(false);
+    }
+  };
+
+  const handleConfirmEmailVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifyingEmail(true);
+    try {
+      const res = await apiRequest<{ user: PublicUser }>("/api/auth/verify/confirm", {
+        method: "POST",
+        body: JSON.stringify({ channel: "email", code: verifyOtpCode.trim() }),
+      });
+      setUser(res.user);
+      setVerifyOtpSent(false);
+      setVerifyOtpCode("");
+      setDevOtpHint(null);
+      toast.success("ایمیل شما با موفقیت تایید شد.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "کد تایید نامعتبر است.");
+    } finally {
+      setVerifyingEmail(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangingPassword(true);
+    try {
+      await apiRequest("/api/auth/password/change", {
+        method: "PATCH",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      toast.success("رمز عبور شما با موفقیت تغییر یافت.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در تغییر رمز عبور");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string, isCurrent: boolean) => {
+    try {
+      await apiRequest(`/api/auth/sessions/${sessionId}`, { method: "DELETE" });
+      if (isCurrent) {
+        setUser(null);
+        toast.info("نشست فعلی بسته شد.");
+        return;
+      }
+      toast.success("نشست با موفقیت بسته شد.");
+      await loadSessions();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا در بستن نشست");
+    }
+  };
+
+  const handleLogoutAllSessions = async () => {
+    try {
+      await apiRequest("/api/auth/logout-all", { method: "POST" });
+      setUser(null);
+      toast.success("تمامی نشست‌های فعال بسته شدند.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا");
+    }
+  };
+
   const statusLabel = (status: string) => {
     if (status === "COMPLETED")
       return { text: "پرداخت موفق", cls: "text-emerald-400" };
     if (status === "FAILED")
       return { text: "ناموفق", cls: "text-rose-400" };
+    if (status === "REFUNDED")
+      return { text: "مرجوع شده", cls: "text-sky-400" };
+    if (status === "CANCELLED")
+      return { text: "لغو شده", cls: "text-slate-400" };
     return { text: "در انتظار پرداخت", cls: "text-amber-400" };
   };
 
@@ -403,66 +542,242 @@ export function DashboardPage() {
       )}
 
       {activeTab === "profile" && (
-        <form
-          onSubmit={handleSaveProfile}
-          className="max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4"
-        >
-          <h2 className="text-base font-bold text-white">ویرایش مشخصات فردی</h2>
-          <div>
-            <label
-              htmlFor="profile-name"
-              className="block text-xs font-semibold text-slate-300 mb-1.5"
-            >
-              نام و نام خانوادگی
-            </label>
-            <input
-              id="profile-name"
-              type="text"
-              required
-              value={profileName}
-              onChange={(e) => setProfileName(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="profile-phone"
-              className="block text-xs font-semibold text-slate-300 mb-1.5"
-            >
-              شماره تماس
-            </label>
-            <input
-              id="profile-phone"
-              type="tel"
-              dir="ltr"
-              value={profilePhone}
-              onChange={(e) => setProfilePhone(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="profile-bio"
-              className="block text-xs font-semibold text-slate-300 mb-1.5"
-            >
-              درباره من / مهارت‌ها
-            </label>
-            <textarea
-              id="profile-bio"
-              rows={3}
-              value={profileBio}
-              onChange={(e) => setProfileBio(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={savingProfile}
-            className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+          <form
+            onSubmit={handleSaveProfile}
+            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4"
           >
-            {savingProfile ? "در حال ذخیره..." : "ذخیره تغییرات"}
-          </button>
-        </form>
+            <h2 className="text-base font-bold text-white">ویرایش مشخصات فردی</h2>
+            <div>
+              <label
+                htmlFor="profile-name"
+                className="block text-xs font-semibold text-slate-300 mb-1.5"
+              >
+                نام و نام خانوادگی
+              </label>
+              <input
+                id="profile-name"
+                type="text"
+                required
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="profile-phone"
+                className="block text-xs font-semibold text-slate-300 mb-1.5"
+              >
+                شماره تماس
+              </label>
+              <input
+                id="profile-phone"
+                type="tel"
+                dir="ltr"
+                value={profilePhone}
+                onChange={(e) => setProfilePhone(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="profile-bio"
+                className="block text-xs font-semibold text-slate-300 mb-1.5"
+              >
+                درباره من / مهارت‌ها
+              </label>
+              <textarea
+                id="profile-bio"
+                rows={3}
+                value={profileBio}
+                onChange={(e) => setProfileBio(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {savingProfile ? "در حال ذخیره..." : "ذخیره تغییرات"}
+            </button>
+          </form>
+
+          <div className="space-y-6">
+            {/* Email Verification */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-indigo-400" />
+                  <span>تایید ایمیل حساب</span>
+                </h2>
+                {user.isEmailVerified ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    تاییدشده
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-amber-400">
+                    در انتظار تایید
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 font-mono">{user.email}</p>
+              {!user.isEmailVerified && (
+                <div className="space-y-3">
+                  {!verifyOtpSent ? (
+                    <button
+                      type="button"
+                      disabled={verifyingEmail}
+                      onClick={handleRequestEmailVerify}
+                      className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {verifyingEmail ? "در حال ارسال..." : "ارسال کد تایید به ایمیل"}
+                    </button>
+                  ) : (
+                    <form onSubmit={handleConfirmEmailVerify} className="space-y-3">
+                      {devOtpHint && (
+                        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-2.5 text-xs text-indigo-300">
+                          کد تایید آزمایشی:{" "}
+                          <span className="font-mono font-bold">{devOtpHint}</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          dir="ltr"
+                          required
+                          maxLength={6}
+                          value={verifyOtpCode}
+                          onChange={(e) => setVerifyOtpCode(e.target.value)}
+                          placeholder="کد ۶ رقمی"
+                          className="flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white font-mono text-center tracking-widest"
+                        />
+                        <button
+                          type="submit"
+                          disabled={verifyingEmail}
+                          className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+                        >
+                          تایید
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Change Password */}
+            <form
+              onSubmit={handleChangePassword}
+              className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4"
+            >
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-indigo-400" />
+                <span>تغییر رمز عبور</span>
+              </h2>
+              <div>
+                <label
+                  htmlFor="current-pass"
+                  className="block text-xs font-semibold text-slate-300 mb-1.5"
+                >
+                  رمز عبور فعلی
+                </label>
+                <input
+                  id="current-pass"
+                  type="password"
+                  required
+                  dir="ltr"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="new-pass"
+                  className="block text-xs font-semibold text-slate-300 mb-1.5"
+                >
+                  رمز عبور جدید (حداقل ۶ کاراکتر)
+                </label>
+                <input
+                  id="new-pass"
+                  type="password"
+                  required
+                  minLength={6}
+                  dir="ltr"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-white font-mono"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="rounded-xl border border-indigo-500/40 bg-indigo-600/20 px-5 py-2.5 text-xs font-bold text-indigo-300 hover:bg-indigo-600 hover:text-white disabled:opacity-50"
+              >
+                {changingPassword ? "در حال ثبت..." : "به‌روزرسانی رمز عبور"}
+              </button>
+            </form>
+
+            {/* Active Sessions */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  <span>نشست‌های فعال</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={handleLogoutAllSessions}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>خروج از همه دستگاه‌ها</span>
+                </button>
+              </div>
+              {loadingSessions ? (
+                <div className="h-20 rounded-xl bg-slate-950/60 animate-pulse" />
+              ) : sessions.length === 0 ? (
+                <p className="text-xs text-slate-400">نشست فعالی ثبت نشده است.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {sessions.map((ses) => (
+                    <div
+                      key={ses.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Laptop className="h-4 w-4 text-slate-400 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-200 truncate">
+                            {ses.userAgent || "مرورگر وب"}
+                            {ses.isCurrent && (
+                              <span className="mr-2 text-[10px] text-emerald-400">
+                                (نشست فعلی)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            ایجاد: {formatPersianDate(ses.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeSession(ses.id, ses.isCurrent)}
+                        className="rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:border-rose-500 hover:text-rose-400 shrink-0"
+                      >
+                        بستن
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

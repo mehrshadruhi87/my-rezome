@@ -7,12 +7,16 @@ import React, {
   useState,
 } from "react";
 import type { CategoryItem, PlatformSettings, PublicUser } from "../types";
-import { apiRequest, setAuthToken } from "../lib/api";
+import { apiRequest } from "../lib/api";
 import {
   DEFAULT_PLATFORM_SETTINGS,
   applyPlatformSettingsToDocument,
   mergePlatformSettings,
 } from "../utils/themeSettings";
+import {
+  applyUserPreferencesToDocument,
+  loadUserPreferences,
+} from "../utils/userPreferences";
 
 interface AuthContextValue {
   user: PublicUser | null;
@@ -47,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     applyPlatformSettingsToDocument(settings);
+    applyUserPreferencesToDocument(loadUserPreferences());
   }, [settings]);
 
   const refreshBootstrap = useCallback(async () => {
@@ -63,9 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.settings) {
         setSettings(mergePlatformSettings(data.settings));
       }
-      if (!data.user) {
-        setAuthToken(null);
-      }
     } catch {
       // Keep current state on transient failure
     } finally {
@@ -81,14 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await apiRequest<{
       user: PublicUser;
       enrolledCourseIds: string[];
-      token?: string;
     }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    if (data.token) {
-      setAuthToken(data.token);
-    }
     setUser(data.user);
     setEnrolledCourseIds(data.enrolledCourseIds);
     return data.user;
@@ -104,14 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await apiRequest<{
         user: PublicUser;
         enrolledCourseIds: string[];
-        token?: string;
       }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (data.token) {
-        setAuthToken(data.token);
-      }
       setUser(data.user);
       setEnrolledCourseIds(data.enrolledCourseIds);
       return data.user;
@@ -123,9 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
     } catch {
-      // Clear local session state even if network request fails
+      // Clear local state even if network request fails
     } finally {
-      setAuthToken(null);
       setUser(null);
       setEnrolledCourseIds([]);
     }
