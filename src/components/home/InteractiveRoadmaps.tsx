@@ -9,8 +9,11 @@ import {
   saveCompletedMilestones,
 } from "../../utils/interactiveCoding";
 import { toPersianDigits } from "../../utils/formatters";
+import { getDictionary } from "../../lib/i18n";
+import { localizeRoadmapTrack } from "../../lib/contentLocalization";
 import {
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   CheckCircle2,
   Circle,
@@ -22,17 +25,26 @@ import {
 } from "lucide-react";
 
 export function InteractiveRoadmaps() {
-  const { motionDuration } = useUserPreferences();
+  const { motionDuration, language, isRtl } = useUserPreferences();
+  const t = getDictionary(language);
+  const DirArrow = isRtl ? ArrowLeft : ArrowRight;
+  const formatNum = (val: number | string) =>
+    language === "fa" ? toPersianDigits(val) : String(val);
+
+  const localizedTracks = INTERACTIVE_ROADMAPS.map((track) =>
+    localizeRoadmapTrack(track, language)
+  );
+
   const [selectedTrackId, setSelectedTrackId] = useState(
-    INTERACTIVE_ROADMAPS[0].id
+    localizedTracks[0].id
   );
   const [completedIds, setCompletedIds] = useState<string[]>(() =>
     loadCompletedMilestones()
   );
 
   const activeTrack =
-    INTERACTIVE_ROADMAPS.find((t) => t.id === selectedTrackId) ??
-    INTERACTIVE_ROADMAPS[0];
+    localizedTracks.find((tr) => tr.id === selectedTrackId) ??
+    localizedTracks[0];
 
   const [selectedMilestoneId, setSelectedMilestoneId] = useState(
     activeTrack.milestones[0].id
@@ -62,35 +74,31 @@ export function InteractiveRoadmaps() {
   };
 
   return (
-    <motion.section
+    <section
       id="roadmaps"
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.1 }}
-      transition={{ duration: motionDuration(0.45) }}
       className="scroll-mt-24 mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-10"
     >
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
             <Compass className="h-4 w-4" />
-            <span>مسیر استاندارد و تعاملی یادگیری</span>
+            <span>{t.roadmaps.kicker}</span>
           </span>
           <h2 className="mt-1.5 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
-            نقشه‌های راه تعاملی ورود به بازار کار
+            {t.roadmaps.title}
           </h2>
           <p className="mt-2 max-w-2xl text-xs sm:text-sm text-slate-700 dark:text-slate-400">
-            روی هر مرحله از نقشه راه کلیک کنید تا سرفصل کامل، پیش‌نیازها، مهارت‌ها و دوره‌های پیشنهادی آن بلافاصله در پنل مقابل نمایش داده شود.
+            {t.roadmaps.subtitle}
           </p>
         </div>
 
-        {/* Track Selector Tabs */}
+        {/* Track Selector Tabs (Swipeable on mobile) */}
         <div
           role="tablist"
-          aria-label="انتخاب نقشه راه"
-          className="flex flex-wrap gap-2"
+          aria-label={t.roadmaps.title}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-2 pb-1 -mx-4 px-4 no-scrollbar md:mx-0 md:px-0 md:pb-0 md:flex-wrap"
         >
-          {INTERACTIVE_ROADMAPS.map((track) => {
+          {localizedTracks.map((track) => {
             const active = track.id === activeTrack.id;
             const trackProg = computeTrackProgress(track, completedIds);
             return (
@@ -100,7 +108,7 @@ export function InteractiveRoadmaps() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setSelectedTrackId(track.id)}
-                className={`rounded-xl border px-4 py-2.5 text-xs font-bold transition-all ${
+                className={`shrink-0 snap-center whitespace-nowrap rounded-xl border px-4 py-2.5 text-xs font-bold transition-all ${
                   active
                     ? "btn-3d border-[var(--accent-500)] bg-[var(--accent-600)] text-white"
                     : "border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 text-slate-800 dark:text-slate-300 hover:border-[var(--accent-500)]/50 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-300)]"
@@ -108,13 +116,14 @@ export function InteractiveRoadmaps() {
               >
                 <span>{track.title}</span>
                 <span
-                  className={`mr-2 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums ${
+                  className={`${isRtl ? "mr-2" : "ml-2"} rounded-md px-1.5 py-0.5 text-[10px] tabular-nums ${
                     active
                       ? "bg-white/20 text-white"
                       : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400"
                   }`}
                 >
-                  {toPersianDigits(trackProg.percent)}٪
+                  {formatNum(trackProg.percent)}
+                  {language === "fa" ? "٪" : "%"}
                 </span>
               </button>
             );
@@ -132,7 +141,7 @@ export function InteractiveRoadmaps() {
                 {activeTrack.duration}
               </span>
               <span className="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 font-semibold text-slate-700 dark:text-slate-300">
-                سطح: {activeTrack.level}
+                {t.roadmaps.levelLabel} {activeTrack.level}
               </span>
             </div>
             <h3 className="mt-2.5 text-lg sm:text-xl font-black text-slate-900 dark:text-white">
@@ -146,15 +155,15 @@ export function InteractiveRoadmaps() {
           <div className="w-full sm:w-64 shrink-0 space-y-2">
             <div className="flex items-center justify-between text-xs font-bold tabular-nums">
               <span className="text-slate-700 dark:text-slate-400">
-                پیشرفت شما در این مسیر
+                {t.roadmaps.progressLabel}
               </span>
               <span
                 data-testid="roadmap-progress-percent"
                 className="text-[var(--accent-600)] dark:text-[var(--accent-400)]"
               >
-                {toPersianDigits(progress.percent)}٪ (
-                {toPersianDigits(progress.completed)} از{" "}
-                {toPersianDigits(progress.total)})
+                {formatNum(progress.percent)}
+                {language === "fa" ? "٪" : "%"} ({formatNum(progress.completed)}{" "}
+                {t.roadmaps.of} {formatNum(progress.total)})
               </span>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-300 dark:bg-slate-800">
@@ -169,7 +178,7 @@ export function InteractiveRoadmaps() {
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Right Column: Interactive Milestone Steps List */}
+          {/* Interactive Milestone Steps List */}
           <div className="lg:col-span-5 space-y-3">
             {activeTrack.milestones.map((ms, index) => {
               const isDone = completedIds.includes(ms.id);
@@ -188,8 +197,8 @@ export function InteractiveRoadmaps() {
                     onClick={() => toggleMilestoneComplete(ms.id)}
                     aria-label={
                       isDone
-                        ? `لغو تکمیل مرحله ${ms.title}`
-                        : `علامت‌گذاری تکمیل مرحله ${ms.title}`
+                        ? `${t.roadmaps.unmarkDone}: ${ms.title}`
+                        : `${t.roadmaps.markDone}: ${ms.title}`
                     }
                     aria-pressed={isDone}
                     data-testid={`roadmap-toggle-${ms.id}`}
@@ -210,11 +219,11 @@ export function InteractiveRoadmaps() {
                     type="button"
                     data-testid={`roadmap-step-${ms.id}`}
                     onClick={() => setSelectedMilestoneId(ms.id)}
-                    className="flex-1 min-w-0 text-right"
+                    className={`flex-1 min-w-0 ${isRtl ? "text-right" : "text-left"}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)] tabular-nums">
-                        مرحله {toPersianDigits(index + 1)} · {ms.weeks}
+                        {t.roadmaps.stepLabel} {formatNum(index + 1)} · {ms.weeks}
                       </span>
                       <span
                         className={`text-[10px] font-bold ${
@@ -223,7 +232,7 @@ export function InteractiveRoadmaps() {
                             : "text-slate-600 dark:text-slate-400"
                         }`}
                       >
-                        {isDone ? "تکمیل شده" : "در انتظار"}
+                        {isDone ? t.roadmaps.done : t.roadmaps.pending}
                       </span>
                     </div>
                     <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -235,7 +244,7 @@ export function InteractiveRoadmaps() {
             })}
           </div>
 
-          {/* Left Adjacent Panel: Live Curriculum, Prerequisites & Recommended Courses */}
+          {/* Adjacent Panel: Live Curriculum, Prerequisites & Recommended Courses */}
           <div
             data-testid="roadmap-detail-panel"
             className="lg:col-span-7 flex flex-col justify-between rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/75 p-5 sm:p-6"
@@ -258,8 +267,8 @@ export function InteractiveRoadmaps() {
                   <CheckCircle2 className="h-4 w-4" />
                   <span>
                     {isSelectedMilestoneDone
-                      ? "تکمیل شد (کلیک برای لغو)"
-                      : "علامت‌گذاری به عنوان تکمیل‌شده"}
+                      ? t.roadmaps.unmarkDone
+                      : t.roadmaps.markDone}
                   </span>
                 </button>
               </div>
@@ -277,7 +286,7 @@ export function InteractiveRoadmaps() {
               <div className="rounded-xl border border-slate-300/80 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 p-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-slate-200 mb-2">
                   <ListChecks className="h-4 w-4 text-[var(--accent-600)] dark:text-[var(--accent-400)]" />
-                  <span>پیش‌نیازهای این مرحله</span>
+                  <span>{t.roadmaps.prerequisites}</span>
                 </div>
                 <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
                   {activeMilestone.prerequisites.map((pre) => (
@@ -293,7 +302,7 @@ export function InteractiveRoadmaps() {
               <div>
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-300">
                   <Layers className="h-4 w-4 text-[var(--accent-500)]" />
-                  <span>مهارت‌ها و ابزارهای کلیدی</span>
+                  <span>{t.roadmaps.skills}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {activeMilestone.skills.map((skill) => (
@@ -312,7 +321,7 @@ export function InteractiveRoadmaps() {
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                   <FolderGit2 className="h-4 w-4" />
-                  <span>پروژه عملی پایان مرحله</span>
+                  <span>{t.roadmaps.capstone}</span>
                 </div>
                 <p className="mt-1.5 text-xs font-medium text-slate-800 dark:text-slate-200">
                   {activeMilestone.capstone}
@@ -324,7 +333,7 @@ export function InteractiveRoadmaps() {
                 <div>
                   <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-300">
                     <BookOpen className="h-4 w-4 text-[var(--accent-500)]" />
-                    <span>دوره‌های پیشنهادی این ایستگاه</span>
+                    <span>{t.roadmaps.recommended}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {activeMilestone.recommendedCourses.map((rc) => (
@@ -334,7 +343,7 @@ export function InteractiveRoadmaps() {
                         className="flex items-center justify-between gap-2 rounded-xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900 px-3 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-[var(--accent-500)] hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
                       >
                         <span className="truncate">{rc.title}</span>
-                        <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                        <DirArrow className="h-3.5 w-3.5 shrink-0" />
                       </Link>
                     ))}
                   </div>
@@ -344,19 +353,19 @@ export function InteractiveRoadmaps() {
 
             <div className="mt-6 pt-4 border-t border-slate-300 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-slate-600 dark:text-slate-400">
-                دوره‌های جامع مطابق با این نقشه راه
+                {t.roadmaps.footerNote}
               </span>
               <Link
                 href={`/courses?category=${activeTrack.categorySlug}`}
                 className="btn-3d inline-flex items-center gap-2 rounded-xl bg-[var(--accent-600)] px-5 py-2.5 text-xs font-bold text-white hover:bg-[var(--accent-500)] transition-all"
               >
-                <span>مشاهده دوره‌های این مسیر</span>
-                <ArrowLeft className="h-4 w-4" />
+                <span>{t.roadmaps.viewPathCourses}</span>
+                <DirArrow className="h-4 w-4" />
               </Link>
             </div>
           </div>
         </div>
       </div>
-    </motion.section>
+    </section>
   );
 }

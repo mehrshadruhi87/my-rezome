@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
-import { ACCENT_THEMES } from "../../utils/userPreferences";
 
 interface Particle {
   x: number;
@@ -26,11 +25,9 @@ export function HeroParticleCanvas() {
     let height = 0;
     const mouse = { x: -9999, y: -9999, active: false };
 
-    const accentTheme = ACCENT_THEMES[prefs.accent];
-    const [r, g, b] = accentTheme.cssVars["--accent-rgb"].split(" ").map(Number);
-    const [r2, g2, b2] = accentTheme.cssVars["--accent-secondary-rgb"]
-      .split(" ")
-      .map(Number);
+    // Hero-scoped signature emerald & cyan particle network
+    const [r, g, b] = [16, 185, 129];
+    const [r2, g2, b2] = [6, 182, 212];
     const isDark = prefs.mode === "dark";
 
     const resize = () => {

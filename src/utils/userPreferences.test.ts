@@ -37,6 +37,7 @@ test("sanitizeUserPreferences clamps font size lower bound and preserves valid o
     accent: "cyber_orange",
     fontSize: 14,
     motionSpeed: "fast",
+    language: "fa",
   });
 });
 
@@ -55,6 +56,7 @@ test("saveUserPreferences and loadUserPreferences round-trip through storage", (
       accent: "emerald_green",
       fontSize: 18,
       motionSpeed: "slow",
+      language: "en",
     },
     mockStorage
   );
@@ -66,6 +68,7 @@ test("saveUserPreferences and loadUserPreferences round-trip through storage", (
     accent: "emerald_green",
     fontSize: 18,
     motionSpeed: "slow",
+    language: "en",
   });
 });
 

@@ -23,7 +23,7 @@ import {
 type CartTab = "cart" | "wishlist";
 
 export function CartPage() {
-  const { settings } = useAuth();
+  const { user, settings } = useAuth();
   const {
     cart,
     wishlist,
@@ -227,6 +227,25 @@ export function CartPage() {
                 <h2 className="text-base font-black text-slate-900 dark:text-white border-b border-slate-300 dark:border-slate-800 pb-3">
                   خلاصه صورت‌حساب
                 </h2>
+
+                {user && (
+                  <div
+                    data-testid="cart-user-summary"
+                    className="rounded-xl border border-slate-300/80 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950/70 px-3.5 py-2.5 text-xs space-y-0.5"
+                  >
+                    <div className="font-bold text-slate-900 dark:text-white truncate">
+                      خریدار: {user.name}
+                    </div>
+                    {user.email && (
+                      <div
+                        dir="ltr"
+                        className="font-mono text-[11px] text-slate-600 dark:text-slate-400 truncate text-right"
+                      >
+                        {user.email}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {settings.allowCoupons && (
                   <form onSubmit={handleApplyCoupon} className="space-y-2">

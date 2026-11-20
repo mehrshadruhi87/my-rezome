@@ -1,23 +1,22 @@
 import React from "react";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
+import { MARQUEE_ITEMS_BY_LANG } from "../../lib/contentLocalization";
 
-const MARQUEE_ITEMS = [
-  "برنامه‌نویسی",
-  "مدیریت و همکاری",
-  "آموزش ۱۰۰٪ پروژه‌محور",
-  "آپدیت مادام‌العمر",
-  "پشتیبانی اختصاصی منتور",
-  "معماری نرم‌افزار در مقیاس واقعی",
-  "کدنویسی زنده در مرورگر",
-  "مسیرهای استاندارد ورود به بازار کار",
-];
-
-function MarqueeTrack({ keyPrefix }: { keyPrefix: string }) {
+function MarqueeTrack({
+  keyPrefix,
+  items,
+  isRtl,
+}: {
+  keyPrefix: string;
+  items: readonly string[];
+  isRtl: boolean;
+}) {
   return (
     <div className="flex shrink-0 items-center gap-6 pl-6">
-      {MARQUEE_ITEMS.map((label, idx) => (
+      {items.map((label, idx) => (
         <React.Fragment key={`${keyPrefix}-${idx}`}>
           <span
-            dir="rtl"
+            dir={isRtl ? "rtl" : "ltr"}
             className="shrink-0 whitespace-nowrap text-sm font-medium tracking-tight text-slate-800 dark:text-slate-200/95"
           >
             {label}
@@ -35,6 +34,9 @@ function MarqueeTrack({ keyPrefix }: { keyPrefix: string }) {
 }
 
 export function KineticRibbonDivider() {
+  const { language, isRtl } = useUserPreferences();
+  const items = MARQUEE_ITEMS_BY_LANG[language];
+
   return (
     <div
       data-testid="kinetic-ribbon-divider"
@@ -50,14 +52,14 @@ export function KineticRibbonDivider() {
         }}
       />
 
-      {/* Single-Row RTL Marquee with Horizontal Edge-Fade Mask */}
+      {/* Single-Row Marquee with Horizontal Edge-Fade Mask */}
       <div
         dir="ltr"
         className="kinetic-edge-fade relative z-10 flex w-full overflow-hidden"
       >
         <div className="kinetic-marquee-rtl flex w-max items-center will-change-transform">
-          <MarqueeTrack keyPrefix="track-a" />
-          <MarqueeTrack keyPrefix="track-b" />
+          <MarqueeTrack keyPrefix="track-a" items={items} isRtl={isRtl} />
+          <MarqueeTrack keyPrefix="track-b" items={items} isRtl={isRtl} />
         </div>
       </div>
     </div>

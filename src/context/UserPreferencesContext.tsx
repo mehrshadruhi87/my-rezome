@@ -12,6 +12,7 @@ import {
   DEFAULT_USER_PREFERENCES,
   type AccentThemeId,
   type MotionSpeedId,
+  type SiteLanguage,
   type ThemeMode,
   type UserPreferences,
   applyUserPreferencesToDocument,
@@ -22,8 +23,12 @@ import {
 
 interface UserPreferencesContextValue {
   prefs: UserPreferences;
+  language: SiteLanguage;
+  isRtl: boolean;
   setMode: (mode: ThemeMode) => void;
   toggleMode: () => void;
+  setLanguage: (language: SiteLanguage) => void;
+  toggleLanguage: () => void;
   setAccent: (accent: AccentThemeId) => void;
   setFontSize: (fontSize: number) => void;
   setMotionSpeed: (speed: MotionSpeedId) => void;
@@ -63,6 +68,17 @@ export function UserPreferencesProvider({
     }));
   }, []);
 
+  const setLanguage = useCallback((language: SiteLanguage) => {
+    setPrefs((prev) => ({ ...prev, language }));
+  }, []);
+
+  const toggleLanguage = useCallback(() => {
+    setPrefs((prev) => ({
+      ...prev,
+      language: prev.language === "fa" ? "en" : "fa",
+    }));
+  }, []);
+
   const setAccent = useCallback((accent: AccentThemeId) => {
     setPrefs((prev) => ({ ...prev, accent }));
   }, []);
@@ -82,6 +98,8 @@ export function UserPreferencesProvider({
 
   const motionMeta = getMotionConfigValues(prefs.motionSpeed);
   const isReducedMotion = prefs.motionSpeed === "off";
+  const language: SiteLanguage = prefs.language === "en" ? "en" : "fa";
+  const isRtl = language === "fa";
 
   const motionDuration = useCallback(
     (baseSeconds: number) => {
@@ -94,8 +112,12 @@ export function UserPreferencesProvider({
   const value = useMemo<UserPreferencesContextValue>(
     () => ({
       prefs,
+      language,
+      isRtl,
       setMode,
       toggleMode,
+      setLanguage,
+      toggleLanguage,
       setAccent,
       setFontSize,
       setMotionSpeed,
@@ -106,8 +128,12 @@ export function UserPreferencesProvider({
     }),
     [
       prefs,
+      language,
+      isRtl,
       setMode,
       toggleMode,
+      setLanguage,
+      toggleLanguage,
       setAccent,
       setFontSize,
       setMotionSpeed,

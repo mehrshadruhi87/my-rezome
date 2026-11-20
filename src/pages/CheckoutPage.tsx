@@ -3,6 +3,7 @@ import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { useStore } from "../store/useStore";
 import { apiRequest } from "../lib/api";
+import { AuthLoadingGate } from "../components/auth/AuthLoadingGate";
 import { formatToman, toPersianDigits } from "../utils/formatters";
 import { toast } from "sonner";
 import {
@@ -16,7 +17,7 @@ import {
 type CheckoutStage = "REVIEW" | "GATEWAY" | "RECEIPT" | "FAILED";
 
 export function CheckoutPage() {
-  const { user, refreshBootstrap } = useAuth();
+  const { user, isAuthLoading, refreshBootstrap } = useAuth();
   const { cart, coupon, clearCart, getCartTotals } = useStore();
   const { push } = useRouter();
   const searchParams = useSearchParams();
@@ -61,6 +62,10 @@ export function CheckoutPage() {
   }, [searchParams]);
 
   const totals = getCartTotals();
+
+  if (isAuthLoading && stage === "REVIEW") {
+    return <AuthLoadingGate message="در حال بررسی حساب کاربری برای تکمیل خرید..." />;
+  }
 
   if (!user && stage === "REVIEW") {
     return (

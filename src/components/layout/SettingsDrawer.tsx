@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Link, useRouter } from "../../router";
 import { useAuth } from "../../context/AuthContext";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
+import { getDictionary } from "../../lib/i18n";
 import {
   ACCENT_THEME_LIST,
   FONT_SIZE_RANGE,
@@ -13,6 +14,7 @@ import {
   BookOpen,
   Compass,
   Gauge,
+  Globe,
   Home,
   Moon,
   Newspaper,
@@ -46,13 +48,17 @@ export function SettingsDrawer({
   const { push } = useRouter();
   const {
     prefs,
+    language,
+    isRtl,
     setMode,
+    setLanguage,
     setAccent,
     setFontSize,
     setMotionSpeed,
     resetPreferences,
     motionDuration,
   } = useUserPreferences();
+  const t = getDictionary(language);
 
   useEffect(() => {
     if (!open) return;
@@ -77,7 +83,7 @@ export function SettingsDrawer({
           className="fixed inset-0 z-50 flex justify-start"
           role="dialog"
           aria-modal="true"
-          aria-label="منو و مینی تنظیمات زنده"
+          aria-label={t.drawer.subtitle}
         >
           {/* Backdrop */}
           <motion.div
@@ -89,17 +95,19 @@ export function SettingsDrawer({
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
           />
 
-          {/* Slide-over Drawer Panel (Right side in RTL) */}
+          {/* Slide-over Drawer Panel (Start edge in both RTL & LTR) */}
           <motion.aside
-            initial={{ x: "100%" }}
+            initial={{ x: isRtl ? "100%" : "-100%" }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
+            exit={{ x: isRtl ? "100%" : "-100%" }}
             transition={{
               type: "tween",
               ease: [0.22, 1, 0.36, 1],
               duration: motionDuration(0.28),
             }}
-            className="relative z-10 flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-slate-300 dark:border-slate-800/90 bg-[#F1F5F9]/98 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl"
+            className={`relative z-10 flex h-full w-full max-w-sm flex-col overflow-y-auto ${
+              isRtl ? "border-l" : "border-r"
+            } border-slate-300 dark:border-slate-800/90 bg-[#F1F5F9]/98 dark:bg-slate-950/95 backdrop-blur-2xl shadow-2xl`}
           >
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-300 dark:border-slate-800 bg-[#E9EFF6]/95 dark:bg-slate-950/90 px-5 py-4 backdrop-blur-xl">
@@ -109,20 +117,24 @@ export function SettingsDrawer({
                 </div>
                 <div>
                   <h2 className="text-sm font-black text-slate-900 dark:text-white">
-                    {settings.brandPrimaryText}
+                    {language === "en"
+                      ? t.brandPrimary
+                      : settings.brandPrimaryText}
                     <span className="text-[var(--accent-600)] dark:text-[var(--accent-400)]">
-                      {settings.brandAccentText}
+                      {language === "en"
+                        ? t.brandAccent
+                        : settings.brandAccentText}
                     </span>
                   </h2>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    منو و مینی تنظیمات زنده
+                    {t.drawer.subtitle}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="بستن منوی تنظیمات"
+                aria-label={t.nav.closeMenuAria}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
               >
                 <X className="h-4 w-4" />
@@ -154,7 +166,7 @@ export function SettingsDrawer({
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="h-4 w-4 text-[var(--accent-600)] dark:text-[var(--accent-400)]" />
                     <h3 className="text-xs font-black text-slate-900 dark:text-white">
-                      تنظیمات زنده رابط کاربری
+                      {t.drawer.liveSettings}
                     </h3>
                   </div>
                   <button
@@ -163,18 +175,59 @@ export function SettingsDrawer({
                     className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-300/70 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white transition-colors"
                   >
                     <RotateCcw className="h-3 w-3" />
-                    <span>پیش‌فرض</span>
+                    <span>{t.drawer.resetDefault}</span>
                   </button>
+                </div>
+
+                {/* 0. Language Switcher */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-300">
+                      <Globe className="h-3.5 w-3.5 text-[var(--accent-500)]" />
+                      <span>{t.drawer.language}</span>
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                      {language === "fa" ? "فارسی (RTL)" : "English (LTR)"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-300/70 dark:bg-slate-950/90 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("fa")}
+                      aria-pressed={language === "fa"}
+                      className={`rounded-lg py-2 text-xs font-bold transition-all ${
+                        language === "fa"
+                          ? "bg-[var(--accent-600)] text-white shadow-md shadow-[var(--accent-500)]/30"
+                          : "text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+                      }`}
+                    >
+                      فارسی
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("en")}
+                      aria-pressed={language === "en"}
+                      className={`rounded-lg py-2 text-xs font-bold transition-all ${
+                        language === "en"
+                          ? "bg-[var(--accent-600)] text-white shadow-md shadow-[var(--accent-500)]/30"
+                          : "text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
                 </div>
 
                 {/* 1. Dark / Light Mode */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-800 dark:text-slate-300">
-                      حالت نمایش
+                      {t.drawer.displayMode}
                     </span>
                     <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                      {prefs.mode === "dark" ? "تاریک (سایبر)" : "روشن (ملایم)"}
+                      {prefs.mode === "dark"
+                        ? t.drawer.darkModeDesc
+                        : t.drawer.lightModeDesc}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-300/70 dark:bg-slate-950/90 p-1">
@@ -190,7 +243,7 @@ export function SettingsDrawer({
                       }`}
                     >
                       <Moon className="h-3.5 w-3.5" />
-                      <span>تاریک</span>
+                      <span>{t.drawer.dark}</span>
                     </button>
                     <button
                       type="button"
@@ -204,7 +257,7 @@ export function SettingsDrawer({
                       }`}
                     >
                       <Sun className="h-3.5 w-3.5" />
-                      <span>روشن</span>
+                      <span>{t.drawer.light}</span>
                     </button>
                   </div>
                 </div>
@@ -334,36 +387,36 @@ export function SettingsDrawer({
               </section>
 
               {/* Quick Navigation Links */}
-              <nav aria-label="ناوبری سریع منو" className="space-y-1.5">
+              <nav aria-label={t.drawer.quickNav} className="space-y-1.5">
                 <div className="px-1 text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                  دسترسی سریع به بخش‌ها
+                  {t.drawer.quickNav}
                 </div>
                 {[
-                  { href: "/", label: "صفحه اصلی", icon: Home },
-                  { href: "/courses", label: "کاتالوگ دوره‌ها", icon: BookOpen },
+                  { href: "/", label: t.drawer.home, icon: Home },
+                  { href: "/courses", label: t.drawer.catalog, icon: BookOpen },
                   {
                     href: "/cart",
-                    label: "سبد خرید و علاقه‌مندی‌ها",
+                    label: t.drawer.cartWishlist,
                     icon: ShoppingBag,
                   },
                   {
                     href: "/roadmaps",
-                    label: "نقشه‌های راه تعاملی",
+                    label: t.drawer.interactivePaths,
                     icon: Compass,
                   },
                   {
                     href: "/code-lab",
-                    label: "آزمایشگاه اجرای زنده کد",
+                    label: t.drawer.liveCodeLab,
                     icon: Terminal,
                   },
                   {
                     href: "/challenges",
-                    label: "چالش‌های روزانه و امتیازدهی",
+                    label: t.drawer.dailyChallenges,
                     icon: Trophy,
                   },
                   {
                     href: "/news",
-                    label: "اخبار برنامه‌نویسی و تکنولوژی",
+                    label: t.drawer.techNews,
                     icon: Newspaper,
                   },
                 ].map((item) => {
@@ -389,8 +442,8 @@ export function SettingsDrawer({
                     <ShieldAlert className="h-4 w-4" />
                     <span>
                       {user.role === "ADMIN"
-                        ? "ورود به پنل مدیریت"
-                        : "ورود به پنل مدرس"}
+                        ? t.drawer.enterAdmin
+                        : t.drawer.enterInstructor}
                     </span>
                   </Link>
                 )}
@@ -400,7 +453,7 @@ export function SettingsDrawer({
               {categories.length > 0 && (
                 <div className="space-y-2 border-t border-slate-300 dark:border-slate-800 pt-4">
                   <div className="px-1 text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                    دپارتمان‌های تخصصی
+                    {t.drawer.departments}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {categories.map((cat) => (

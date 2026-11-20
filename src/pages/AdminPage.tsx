@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { apiRequest } from "../lib/api";
+import { syncSupabaseAuthSessionToLocalStore } from "../lib/localBackend";
+import { AuthLoadingGate } from "../components/auth/AuthLoadingGate";
 import {
   formatPersianDate,
   formatToman,
@@ -25,6 +27,7 @@ import type {
 } from "../types";
 import { toast } from "sonner";
 import {
+  Bell,
   BookOpen,
   CheckCircle2,
   Clock,
@@ -54,6 +57,8 @@ import { AdminMediaUploadManager } from "../components/admin/AdminMediaUploadMan
 import { AdminDepartmentsTab } from "../components/admin/AdminDepartmentsTab";
 import { AdminInstructorsTab } from "../components/admin/AdminInstructorsTab";
 import { AdminNewsTab } from "../components/admin/AdminNewsTab";
+import { AdminLiveNotificationTab } from "../components/admin/AdminLiveNotificationTab";
+import { AdminSupabaseSyncBanner } from "../components/admin/AdminSupabaseSyncBanner";
 
 type AdminTab =
   | "overview"
@@ -62,6 +67,7 @@ type AdminTab =
   | "categories"
   | "instructors"
   | "news"
+  | "notification"
   | "orders"
   | "reviews"
   | "coupons"
@@ -97,7 +103,7 @@ interface CourseFormState {
 }
 
 export function AdminPage() {
-  const { user, categories, refreshBootstrap } = useAuth();
+  const { user, categories, refreshBootstrap, isAuthLoading } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const isApprovedInstructor =
     user?.role === "INSTRUCTOR" &&
@@ -132,6 +138,7 @@ export function AdminPage() {
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [coupons, setCoupons] = useState<DiscountCodeItem[]>([]);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [pendingModerationCount, setPendingModerationCount] = useState(0);
 
   // Course Editor Modal
   const [courseModalOpen, setCourseModalOpen] = useState(false);
@@ -153,17 +160,13 @@ export function AdminPage() {
   );
 
   const loadAdminData = async () => {
+    if (!user) return;
     setLoading(true);
+    // Ensure local fallback store stays synced with the active Supabase Auth user across iframe navigations
+    syncSupabaseAuthSessionToLocalStore(user);
     try {
       if (isAdmin) {
-        const [
-          overviewRes,
-          coursesRes,
-          ordersRes,
-          reviewsRes,
-          couponsRes,
-          usersRes,
-        ] = await Promise.all([
+        const results = await Promise.allSettled([
           apiRequest<{
             stats: typeof stats;
             recentOrders: OrderRecord[];
@@ -176,15 +179,46 @@ export function AdminPage() {
           apiRequest<{ reviews: ReviewItem[] }>("/api/admin/reviews?limit=50"),
           apiRequest<{ coupons: DiscountCodeItem[] }>("/api/admin/coupons"),
           apiRequest<{ users: AdminUserRow[] }>("/api/admin/users?limit=100"),
+          apiRequest<{ counts: { totalPending: number } }>(
+            "/api/admin/moderation"
+          ),
         ]);
-        setStats(overviewRes.stats);
-        setRecentOrders(overviewRes.recentOrders);
-        setRecentRegistrations(overviewRes.recentRegistrations || []);
-        setCourses(coursesRes.courses);
-        setAllOrders(ordersRes.orders);
-        setReviews(reviewsRes.reviews);
-        setCoupons(couponsRes.coupons);
-        setUsers(usersRes.users);
+
+        const [
+          overviewRes,
+          coursesRes,
+          ordersRes,
+          reviewsRes,
+          couponsRes,
+          usersRes,
+          moderationRes,
+        ] = results;
+
+        if (overviewRes.status === "fulfilled") {
+          setStats(overviewRes.value.stats);
+          setRecentOrders(overviewRes.value.recentOrders);
+          setRecentRegistrations(overviewRes.value.recentRegistrations || []);
+        }
+        if (coursesRes.status === "fulfilled") {
+          setCourses(coursesRes.value.courses);
+        }
+        if (ordersRes.status === "fulfilled") {
+          setAllOrders(ordersRes.value.orders);
+        }
+        if (reviewsRes.status === "fulfilled") {
+          setReviews(reviewsRes.value.reviews);
+        }
+        if (couponsRes.status === "fulfilled") {
+          setCoupons(couponsRes.value.coupons);
+        }
+        if (usersRes.status === "fulfilled") {
+          setUsers(usersRes.value.users);
+        }
+        if (moderationRes.status === "fulfilled") {
+          setPendingModerationCount(
+            moderationRes.value.counts?.totalPending || 0
+          );
+        }
       } else if (isApprovedInstructor) {
         const coursesRes = await apiRequest<{ courses: CourseSummary[] }>(
           "/api/courses?includeUnpublished=true&limit=100"
@@ -192,6 +226,7 @@ export function AdminPage() {
         setCourses(coursesRes.courses);
       }
     } catch (err) {
+      // Never clear the active Supabase Auth session on secondary API 401/404 errors
       toast.error(err instanceof Error ? err.message : "خطا در بارگذاری پنل");
     } finally {
       setLoading(false);
@@ -199,6 +234,7 @@ export function AdminPage() {
   };
 
   useEffect(() => {
+    if (isAuthLoading) return;
     if (isAdmin) {
       loadAdminData();
     } else if (isApprovedInstructor) {
@@ -207,7 +243,11 @@ export function AdminPage() {
     } else {
       setLoading(false);
     }
-  }, [user?.id, user?.role, user?.instructorStatus]);
+  }, [isAuthLoading, user?.id, user?.role, user?.instructorStatus]);
+
+  if (isAuthLoading) {
+    return <AuthLoadingGate message="در حال بررسی سطح دسترسی مدیریت..." />;
+  }
 
   if (!user || (!isAdmin && !isApprovedInstructor)) {
     return (
@@ -279,7 +319,7 @@ export function AdminPage() {
           lessons: [
             {
               id: "temp_ls_1",
-              title: "معرفی دوره و نقشه راه",
+              title: "معرفی دوره و مسیر یادگیری",
               duration: "۱۵:۰۰",
               videoUrl: "",
               isFree: true,
@@ -346,17 +386,31 @@ export function AdminPage() {
             : null,
       };
       if (courseForm.id) {
-        await apiRequest(`/api/admin/courses/${courseForm.id}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-        toast.success("دوره با موفقیت ویرایش شد.");
+        const res = await apiRequest<{ pendingApproval?: boolean }>(
+          `/api/admin/courses/${courseForm.id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          }
+        );
+        toast.success(
+          res.pendingApproval || !isAdmin
+            ? "ویرایش دوره با وضعیت «در انتظار تأیید مدیر» ثبت شد و پس از بررسی منتشر می‌شود."
+            : "دوره با موفقیت ویرایش و در Supabase ذخیره شد."
+        );
       } else {
-        await apiRequest("/api/admin/courses", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        toast.success("دوره جدید با موفقیت ایجاد شد.");
+        const res = await apiRequest<{ pendingApproval?: boolean }>(
+          "/api/admin/courses",
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          }
+        );
+        toast.success(
+          res.pendingApproval || !isAdmin
+            ? "دوره جدید با وضعیت «در انتظار تأیید مدیر» ارسال شد و پس از تأیید منتشر می‌شود."
+            : "دوره جدید با موفقیت ایجاد و منتشر شد."
+        );
       }
       setCourseModalOpen(false);
       await Promise.all([loadAdminData(), refreshBootstrap()]);
@@ -584,11 +638,17 @@ export function AdminPage() {
     { id: "categories", label: "دپارتمان‌ها", icon: FolderTree, adminOnly: true },
     {
       id: "instructors",
-      label: "تایید مدرسین",
+      label: "تأیید مدرسین و محتوا",
       icon: GraduationCap,
       adminOnly: true,
     },
     { id: "news", label: "اخبار برنامه‌نویسی", icon: Newspaper, adminOnly: true },
+    {
+      id: "notification",
+      label: "نوتیفیکیشن زنده / بنر تخفیف",
+      icon: Bell,
+      adminOnly: true,
+    },
     { id: "orders", label: "سفارش‌ها", icon: Receipt, adminOnly: true },
     { id: "reviews", label: "دیدگاه‌ها", icon: MessageSquare, adminOnly: true },
     { id: "coupons", label: "کدهای تخفیف", icon: Tag, adminOnly: true },
@@ -601,7 +661,7 @@ export function AdminPage() {
     : navTabs.filter((t) => !t.adminOnly);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-10 space-y-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-10 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-300 dark:border-slate-800 pb-6">
         <div>
           <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -621,15 +681,30 @@ export function AdminPage() {
         </button>
       </div>
 
+      {isAdmin ? (
+        <AdminSupabaseSyncBanner />
+      ) : (
+        <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200">
+          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <span>
+            در پنل مدرس، هر دوره جدید، ویرایش یا آپلود ویدیو ابتدا با وضعیت{" "}
+            <strong>«در انتظار تأیید مدیر»</strong> ثبت می‌شود و پس از بررسی و تأیید مدیر کل به‌صورت عمومی در سایت منتشر خواهد شد.
+          </span>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
+          const showPendingBadge =
+            tab.id === "instructors" && pendingModerationCount > 0;
           return (
             <button
               key={tab.id}
               type="button"
+              data-testid={`admin-tab-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition-colors whitespace-nowrap ${
                 active
@@ -639,6 +714,18 @@ export function AdminPage() {
             >
               <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
+              {showPendingBadge && (
+                <span
+                  data-testid="moderation-pending-badge"
+                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${
+                    active
+                      ? "bg-white text-rose-600"
+                      : "bg-rose-500 text-white"
+                  }`}
+                >
+                  {toPersianDigits(pendingModerationCount)}
+                </span>
+              )}
             </button>
           );
         })}
@@ -864,8 +951,9 @@ export function AdminPage() {
                         <td className="px-4 py-3.5">
                           <button
                             type="button"
+                            disabled={!isAdmin}
                             onClick={() => handleToggleFullAccess(c)}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                               c.fullAccess
                                 ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40"
                                 : "bg-[#DFE7F2] dark:bg-slate-800 text-slate-600 dark:text-slate-400"
@@ -876,15 +964,34 @@ export function AdminPage() {
                           </button>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span
-                            className={
-                              c.isPublished
-                                ? "text-emerald-700 dark:text-emerald-400 font-bold"
-                                : "text-amber-700 dark:text-amber-400 font-bold"
-                            }
-                          >
-                            {c.isPublished ? "منتشرشده" : "پیش‌نویس"}
-                          </span>
+                          <div className="space-y-1">
+                            {c.moderationStatus === "pending" ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                                <Clock className="h-3 w-3" />
+                                در انتظار تأیید مدیر
+                              </span>
+                            ) : c.moderationStatus === "rejected" ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-rose-500/15 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-400">
+                                <XCircle className="h-3 w-3" />
+                                رد شده
+                              </span>
+                            ) : c.isPublished ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                                <CheckCircle2 className="h-3 w-3" />
+                                منتشر شده
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-500/15 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                پیش‌نویس
+                              </span>
+                            )}
+                            {c.moderationStatus === "rejected" &&
+                              c.rejectionReason && (
+                                <div className="max-w-[200px] text-[10px] leading-snug text-rose-600 dark:text-rose-400">
+                                  دلیل: {c.rejectionReason}
+                                </div>
+                              )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
@@ -1356,6 +1463,11 @@ export function AdminPage() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {/* LIVE NOTIFICATION (SUPABASE SQL) */}
+          {activeTab === "notification" && isAdmin && (
+            <AdminLiveNotificationTab />
           )}
 
           {/* 8. PLATFORM SETTINGS */}

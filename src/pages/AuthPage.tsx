@@ -4,16 +4,20 @@ import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { AuthAnimatedBackdrop } from "../components/auth/AuthAnimatedBackdrop";
-import { apiRequest } from "../lib/api";
+import { AuthLoadingGate } from "../components/auth/AuthLoadingGate";
+import { validateAuthEmail, validateAuthPassword } from "../lib/supabaseAuth";
+import { getDictionary } from "../lib/i18n";
 import { toast } from "sonner";
 import {
-  AtSign,
   Briefcase,
   CheckCircle2,
   Code2,
+  Eye,
+  EyeOff,
   FileText,
   GraduationCap,
   KeyRound,
+  Loader2,
   Lock,
   LogIn,
   Mail,
@@ -22,17 +26,28 @@ import {
   UserPlus,
 } from "lucide-react";
 
-type AuthViewMode = "login" | "register" | "instructor" | "forgot" | "reset";
+type AuthViewMode = "login" | "register" | "instructor" | "forgot";
+
+const RECOVERY_SUCCESS_MESSAGE =
+  "لینک بازیابی رمز عبور به جیمیل شما ارسال شد. لطفاً صندوق ورودی یا پوشه Spam را بررسی کنید";
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const { login, register, registerInstructor, settings } = useAuth();
-  const { isReducedMotion } = useUserPreferences();
+  const {
+    isAuthLoading,
+    login,
+    register,
+    registerInstructor,
+    sendPasswordResetEmail,
+    settings,
+  } = useAuth();
+  const { language, isReducedMotion } = useUserPreferences();
+  const t = getDictionary(language);
   const { push } = useRouter();
   const searchParams = useSearchParams();
   const redirectTarget = searchParams.get("redirect") || "/dashboard";
   const [spotlight, setSpotlight] = useState({ x: 50, y: 38, active: false });
 
-  const initialTab =
+  const initialTab: AuthViewMode =
     searchParams.get("tab") === "instructor" ? "instructor" : mode;
   const [viewMode, setViewMode] = useState<AuthViewMode>(initialTab);
   const [prevPropMode, setPrevPropMode] = useState(mode);
@@ -43,77 +58,56 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   // Common fields
   const [name, setName] = useState("");
-  const [identifier, setIdentifier] = useState(""); // login: email / phone / username
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Instructor fields
   const [specialty, setSpecialty] = useState("");
   const [bio, setBio] = useState("");
   const [instructorSubmitted, setInstructorSubmitted] = useState(false);
 
-  // Password reset fields
-  const [resetCode, setResetCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [devResetHint, setDevResetHint] = useState<string | null>(null);
+  // Password recovery confirmation state
+  const [recoverySentEmail, setRecoverySentEmail] = useState<string | null>(
+    null
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Distinct color themes per mode so Login / Student Register / Instructor Register feel unmistakably different
   const themeConfig =
     viewMode === "register"
       ? {
           accentBg: "bg-emerald-600 hover:bg-emerald-500",
-          accentBadge:
-            "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
           cardRing:
             "border-emerald-500/35 dark:border-emerald-500/30 shadow-emerald-950/15",
-          glowA: "rgba(16, 185, 129, 0.22)",
-          glowB: "rgba(20, 184, 166, 0.16)",
-          iconBg: "bg-emerald-600",
+          iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
           focusBorder: "focus:border-emerald-500",
-          title: "ثبت‌نام دانشجوی جدید",
-          subtitle:
-            "عضویت سریع با نام کاربری یا شماره موبایل (وارد کردن ایمیل اختیاری است)",
+          title: t.auth.registerTitle,
+          subtitle: t.auth.registerSub,
         }
       : viewMode === "instructor"
       ? {
           accentBg: "bg-amber-600 hover:bg-amber-500",
-          accentBadge:
-            "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/35",
           cardRing:
             "border-amber-500/40 dark:border-amber-500/30 shadow-amber-950/15",
-          glowA: "rgba(245, 158, 11, 0.22)",
-          glowB: "rgba(139, 92, 246, 0.16)",
-          iconBg: "bg-amber-600",
+          iconBg: "bg-gradient-to-br from-amber-500 to-orange-600",
           focusBorder: "focus:border-amber-500",
-          title: "ثبت‌نام مدرس و درخواست تدریس",
-          subtitle:
-            "درخواست شما ثبت و پس از تایید مدیریت، دسترسی انتشار دوره و آپلود ویدیو فعال می‌شود",
+          title: t.auth.instructorTitle,
+          subtitle: t.auth.instructorSub,
         }
       : {
           accentBg: "btn-3d",
-          accentBadge:
-            "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30",
           cardRing:
             "border-indigo-500/35 dark:border-indigo-500/30 shadow-indigo-950/15",
-          glowA: "rgba(99, 102, 241, 0.24)",
-          glowB: "rgba(6, 182, 212, 0.16)",
-          iconBg: "bg-gradient-to-br from-[var(--accent-500)] to-[var(--accent-700)]",
+          iconBg:
+            "bg-gradient-to-br from-[var(--accent-500)] to-[var(--accent-700)]",
           focusBorder: "focus:border-indigo-500",
           title:
-            viewMode === "forgot"
-              ? "بازیابی رمز عبور"
-              : viewMode === "reset"
-              ? "ثبت رمز عبور جدید"
-              : "ورود به حساب کدآکادمی",
+            viewMode === "forgot" ? t.auth.forgotTitle : t.auth.loginTitle,
           subtitle:
-            viewMode === "login"
-              ? "با ایمیل، شماره موبایل یا نام کاربری خود وارد شوید"
-              : "کد تایید بازیابی به ایمیل ثبت‌شده ارسال می‌شود",
+            viewMode === "forgot" ? t.auth.forgotSub : t.auth.loginSub,
         };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,10 +116,14 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     setSubmitting(true);
     try {
       if (viewMode === "login") {
-        if (!identifier.trim()) {
-          throw new Error("لطفاً ایمیل، شماره موبایل یا نام کاربری را وارد کنید.");
+        const emailCheck = validateAuthEmail(email);
+        if (!emailCheck.valid) {
+          throw new Error(emailCheck.error || "لطفاً آدرس ایمیل معتبر وارد کنید.");
         }
-        const loggedUser = await login(identifier.trim(), password);
+        if (!password) {
+          throw new Error("لطفاً رمز عبور خود را وارد کنید.");
+        }
+        const loggedUser = await login(emailCheck.normalized, password);
         toast.success(`خوش آمدید، ${loggedUser.name}`);
         if (
           (loggedUser.role === "ADMIN" || loggedUser.role === "INSTRUCTOR") &&
@@ -137,35 +135,47 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         }
       } else if (viewMode === "register") {
         if (!name.trim()) {
-          throw new Error("لطفاً نام و نام خانوادگی را وارد کنید.");
+          throw new Error("لطفاً نام و نام خانوادگی خود را وارد کنید.");
         }
-        if (!email.trim() && !phone.trim() && !username.trim()) {
+        const emailCheck = validateAuthEmail(email);
+        if (!emailCheck.valid) {
+          throw new Error(emailCheck.error || "لطفاً آدرس ایمیل معتبر وارد کنید.");
+        }
+        const passCheck = validateAuthPassword(password);
+        if (!passCheck.valid) {
           throw new Error(
-            "لطفاً حداقل یکی از فیلدهای نام کاربری، شماره موبایل یا ایمیل را وارد کنید."
+            passCheck.error || "رمز عبور باید حداقل ۶ کاراکتر باشد."
           );
-        }
-        if (password.length < 6) {
-          throw new Error("رمز عبور باید حداقل ۶ کاراکتر باشد.");
         }
         const newUser = await register({
           name: name.trim(),
-          username: username.trim() || undefined,
-          email: email.trim() || undefined,
+          email: emailCheck.normalized,
           phone: phone.trim() || undefined,
           password,
         });
-        toast.success(`حساب کاربری شما با موفقیت ساخته شد، ${newUser.name}`);
+        toast.success(
+          `خوش آمدید، ${newUser.name}! حساب کاربری شما با موفقیت ساخته شد.`
+        );
         push(redirectTarget);
       } else if (viewMode === "instructor") {
         if (!name.trim() || !specialty.trim() || !phone.trim()) {
-          throw new Error("نام، حوزه تخصص و شماره تماس برای ثبت‌نام مدرس الزامی است.");
+          throw new Error(
+            "نام، حوزه تخصص و شماره تماس برای ثبت‌نام مدرس الزامی است."
+          );
         }
-        if (password.length < 6) {
-          throw new Error("رمز عبور باید حداقل ۶ کاراکتر باشد.");
+        const emailCheck = validateAuthEmail(email);
+        if (!emailCheck.valid) {
+          throw new Error(emailCheck.error || "لطفاً آدرس ایمیل معتبر وارد کنید.");
+        }
+        const passCheck = validateAuthPassword(password);
+        if (!passCheck.valid) {
+          throw new Error(
+            passCheck.error || "رمز عبور باید حداقل ۶ کاراکتر باشد."
+          );
         }
         await registerInstructor({
           name: name.trim(),
-          email: email.trim() || undefined,
+          email: emailCheck.normalized,
           phone: phone.trim(),
           specialty: specialty.trim(),
           bio: bio.trim(),
@@ -173,36 +183,18 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         });
         setInstructorSubmitted(true);
         toast.success(
-          "درخواست مدرسی شما با موفقیت ثبت شد و پس از تایید مدیریت فعال می‌گردد."
+          "حساب کاربری و درخواست مدرسی شما ثبت شد و پس از تایید مدیریت فعال می‌گردد."
         );
       } else if (viewMode === "forgot") {
-        const res = await apiRequest<{ sent: boolean; devOtpPreview?: string }>(
-          "/api/auth/password/forgot",
-          {
-            method: "POST",
-            body: JSON.stringify({ email: email.trim() }),
-          }
-        );
-        if (res.devOtpPreview) {
-          setDevResetHint(res.devOtpPreview);
+        const emailCheck = validateAuthEmail(email);
+        if (!emailCheck.valid) {
+          throw new Error(
+            emailCheck.error || "لطفاً یک آدرس جیمیل معتبر وارد کنید."
+          );
         }
-        toast.success("کد بازیابی رمز عبور ارسال شد.");
-        setViewMode("reset");
-      } else if (viewMode === "reset") {
-        await apiRequest("/api/auth/password/reset", {
-          method: "POST",
-          body: JSON.stringify({
-            email: email.trim(),
-            code: resetCode.trim(),
-            newPassword,
-          }),
-        });
-        toast.success("رمز عبور جدید ثبت شد. اکنون وارد شوید.");
-        setPassword("");
-        setResetCode("");
-        setNewPassword("");
-        setDevResetHint(null);
-        setViewMode("login");
+        await sendPasswordResetEmail(emailCheck.normalized);
+        setRecoverySentEmail(emailCheck.normalized);
+        toast.success(RECOVERY_SUCCESS_MESSAGE);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "خطا در احراز هویت";
@@ -217,8 +209,14 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     if (isReducedMotion) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    const x = Math.max(
+      0,
+      Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)
+    );
+    const y = Math.max(
+      0,
+      Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
+    );
     setSpotlight({ x, y, active: true });
   };
 
@@ -226,11 +224,20 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     setSpotlight((prev) => ({ ...prev, active: false }));
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="-mt-16 sm:-mt-20 min-h-screen pt-16 sm:pt-20 bg-[var(--site-bg)]">
+        <AuthLoadingGate message="در حال بررسی وضعیت ورود شما..." />
+      </div>
+    );
+  }
+
   return (
     <div
+      data-testid="auth-page-container"
       onMouseMove={handleBackdropMouseMove}
       onMouseLeave={handleBackdropMouseLeave}
-      className="relative flex min-h-[calc(100vh-4.25rem)] items-center justify-center overflow-hidden py-12 px-4 sm:py-16"
+      className="relative -mt-16 sm:-mt-20 flex min-h-screen items-center justify-center overflow-hidden bg-[var(--site-bg)] pt-24 pb-12 px-4 sm:pt-28 sm:pb-16"
     >
       {/* Distinct Multi-Layered Animated Aurora, Particles & Interactive Spotlight Backdrop */}
       <AuthAnimatedBackdrop
@@ -254,6 +261,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-500)]/75 to-transparent"
           />
+
           {/* Header */}
           <div className="text-center space-y-2">
             <div
@@ -263,6 +271,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 <GraduationCap className="h-6 w-6" />
               ) : viewMode === "register" ? (
                 <UserPlus className="h-6 w-6" />
+              ) : viewMode === "forgot" ? (
+                <KeyRound className="h-6 w-6" />
               ) : (
                 <Code2 className="h-6 w-6" />
               )}
@@ -288,6 +298,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               onClick={() => {
                 setErrorMsg(null);
                 setInstructorSubmitted(false);
+                setRecoverySentEmail(null);
                 setViewMode("login");
               }}
               className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition-all ${
@@ -297,7 +308,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               }`}
             >
               <LogIn className="h-3.5 w-3.5" />
-              <span>ورود</span>
+              <span>{t.auth.tabLogin}</span>
             </button>
             <button
               type="button"
@@ -306,6 +317,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               onClick={() => {
                 setErrorMsg(null);
                 setInstructorSubmitted(false);
+                setRecoverySentEmail(null);
                 setViewMode("register");
               }}
               className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition-all ${
@@ -315,7 +327,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               }`}
             >
               <UserPlus className="h-3.5 w-3.5" />
-              <span>ثبت‌نام دانشجو</span>
+              <span>{t.auth.tabRegister}</span>
             </button>
             <button
               type="button"
@@ -323,6 +335,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               aria-selected={viewMode === "instructor"}
               onClick={() => {
                 setErrorMsg(null);
+                setRecoverySentEmail(null);
                 setViewMode("instructor");
               }}
               className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition-all ${
@@ -332,23 +345,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               }`}
             >
               <GraduationCap className="h-3.5 w-3.5" />
-              <span>ثبت‌نام مدرس</span>
+              <span>{t.auth.tabInstructor}</span>
             </button>
           </div>
 
           {errorMsg && (
             <div
               role="alert"
+              data-testid="auth-error-alert"
               className="rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs font-semibold text-rose-700 dark:text-rose-300"
             >
               {errorMsg}
-            </div>
-          )}
-
-          {devResetHint && viewMode === "reset" && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
-              کد بازیابی:{" "}
-              <strong className="font-mono select-all">{devResetHint}</strong>
             </div>
           )}
 
@@ -379,6 +386,50 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 </Link>
               </div>
             </div>
+          ) : viewMode === "forgot" && recoverySentEmail ? (
+            <div
+              data-testid="recovery-sent-confirmation"
+              className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-6 text-center space-y-4"
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">
+                ایمیل بازیابی ارسال شد
+              </h2>
+              <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                {RECOVERY_SUCCESS_MESSAGE}
+              </p>
+              <p
+                dir="ltr"
+                className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300"
+              >
+                {recoverySentEmail}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setRecoverySentEmail(null);
+                    setViewMode("login");
+                  }}
+                  className="btn-3d rounded-xl px-5 py-2.5 text-xs font-bold"
+                >
+                  بازگشت به صفحه ورود
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setRecoverySentEmail(null);
+                  }}
+                  className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/70"
+                >
+                  ارسال مجدد
+                </button>
+              </div>
+            </div>
           ) : (viewMode === "register" || viewMode === "instructor") &&
             !settings.allowRegistration ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-center space-y-3">
@@ -394,28 +445,29 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               {/* LOGIN VIEW */}
               {viewMode === "login" && (
                 <div>
                   <label
-                    htmlFor="auth-identifier"
+                    htmlFor="auth-login-email"
                     className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
                   >
-                    ایمیل، شماره موبایل یا نام کاربری
+                    {t.auth.emailLabel}
                   </label>
                   <div className="relative">
                     <input
-                      id="auth-identifier"
-                      type="text"
+                      id="auth-login-email"
+                      type="email"
                       required
+                      autoComplete="email"
                       dir="ltr"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="name@example.com / 0912... / username"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@gmail.com"
                       className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
                     />
-                    <User className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <Mail className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
                   </div>
                 </div>
               )}
@@ -435,6 +487,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                         id="auth-name"
                         type="text"
                         required
+                        autoComplete="name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="مثلاً: علی رضایی"
@@ -444,71 +497,50 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor="auth-username"
-                        className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
-                      >
-                        نام کاربری
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="auth-username"
-                          type="text"
-                          dir="ltr"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          placeholder="ali_dev"
-                          className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-9 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
-                        />
-                        <AtSign className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="auth-phone"
-                        className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
-                      >
-                        شماره موبایل
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="auth-phone"
-                          type="tel"
-                          dir="ltr"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="09120000000"
-                          className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-9 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
-                        />
-                        <Phone className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
-                      </div>
+                  <div>
+                    <label
+                      htmlFor="auth-register-email"
+                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
+                    >
+                      ایمیل *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="auth-register-email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        dir="ltr"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@gmail.com"
+                        className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
+                      />
+                      <Mail className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
                     </div>
                   </div>
 
                   <div>
                     <label
-                      htmlFor="auth-email-optional"
+                      htmlFor="auth-phone"
                       className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
                     >
-                      ایمیل{" "}
+                      شماره موبایل{" "}
                       <span className="font-normal text-emerald-700 dark:text-emerald-400">
                         (اختیاری)
                       </span>
                     </label>
                     <div className="relative">
                       <input
-                        id="auth-email-optional"
-                        type="email"
+                        id="auth-phone"
+                        type="tel"
                         dir="ltr"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@example.com (اختیاری)"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="09120000000"
                         className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
                       />
-                      <Mail className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <Phone className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
                     </div>
                   </div>
                 </>
@@ -592,19 +624,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                       htmlFor="inst-email"
                       className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
                     >
-                      ایمیل{" "}
-                      <span className="font-normal text-amber-700 dark:text-amber-400">
-                        (اختیاری)
-                      </span>
+                      ایمیل *
                     </label>
                     <div className="relative">
                       <input
                         id="inst-email"
                         type="email"
+                        required
                         dir="ltr"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="instructor@example.com"
+                        placeholder="instructor@gmail.com"
                         className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
                       />
                       <Mail className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -633,24 +663,25 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 </>
               )}
 
-              {/* FORGOT / RESET EMAIL */}
-              {(viewMode === "forgot" || viewMode === "reset") && (
+              {/* FORGOT PASSWORD (REAL GMAIL RECOVERY LINK) */}
+              {viewMode === "forgot" && (
                 <div>
                   <label
                     htmlFor="auth-forgot-email"
                     className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
                   >
-                    ایمیل حساب کاربری
+                    آدرس جیمیل / ایمیل حساب کاربری *
                   </label>
                   <div className="relative">
                     <input
                       id="auth-forgot-email"
                       type="email"
                       required
+                      autoComplete="email"
                       dir="ltr"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com"
+                      placeholder="yourname@gmail.com"
                       className="w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:border-indigo-500 focus:outline-none"
                     />
                     <Mail className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -663,118 +694,97 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 viewMode === "register" ||
                 viewMode === "instructor") && (
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label
-                      htmlFor="auth-password"
-                      className="block text-xs font-bold text-slate-700 dark:text-slate-300"
-                    >
-                      رمز عبور *
-                    </label>
-                    {viewMode === "login" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setErrorMsg(null);
-                          setViewMode("forgot");
-                        }}
-                        className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
-                      >
-                        فراموشی رمز عبور؟
-                      </button>
-                    )}
-                  </div>
+                  <label
+                    htmlFor="auth-password"
+                    className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
+                  >
+                    {t.auth.passwordLabel}
+                  </label>
                   <div className="relative">
                     <input
                       id="auth-password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       required
+                      autoComplete={
+                        viewMode === "login"
+                          ? "current-password"
+                          : "new-password"
+                      }
                       dir="ltr"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="حداقل ۶ کاراکتر"
-                      className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
+                      placeholder={t.auth.passwordPlaceholder}
+                      className={`w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-10 text-xs text-slate-900 dark:text-white font-mono focus:outline-none ${themeConfig.focusBorder}`}
                     />
                     <Lock className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={
+                        showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"
+                      }
+                      className="absolute left-2.5 top-2 p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
-                </div>
-              )}
 
-              {/* RESET CODE & NEW PASSWORD */}
-              {viewMode === "reset" && (
-                <>
-                  <div>
-                    <label
-                      htmlFor="auth-reset-code"
-                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
-                    >
-                      کد بازیابی ۶ رقمی
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="auth-reset-code"
-                        type="text"
-                        required
-                        dir="ltr"
-                        value={resetCode}
-                        onChange={(e) => setResetCode(e.target.value)}
-                        placeholder="123456"
-                        className="w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:border-indigo-500 focus:outline-none"
-                      />
-                      <KeyRound className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
+                  {/* Forgot Password Link — Cleanly Right-Aligned Directly Below Password Input */}
+                  {viewMode === "login" && (
+                    <div className="mt-2 text-right">
+                      <button
+                        type="button"
+                        data-testid="forgot-password-link"
+                        onClick={() => {
+                          setErrorMsg(null);
+                          setRecoverySentEmail(null);
+                          setViewMode("forgot");
+                        }}
+                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 hover:underline underline-offset-4 transition-colors"
+                      >
+                        {t.auth.forgotPasswordLink}
+                      </button>
                     </div>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="auth-new-password"
-                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
-                    >
-                      رمز عبور جدید
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="auth-new-password"
-                        type="password"
-                        required
-                        dir="ltr"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full rounded-xl border border-slate-300 dark:border-slate-800 bg-[#F1F5F9] dark:bg-slate-950 py-2.5 pr-10 pl-3 text-xs text-slate-900 dark:text-white font-mono focus:border-indigo-500 focus:outline-none"
-                      />
-                      <Lock className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-slate-500" />
-                    </div>
-                  </div>
-                </>
+                  )}
+                </div>
               )}
 
               <button
                 type="submit"
                 disabled={submitting}
-                className={`w-full rounded-xl py-3 text-xs font-black text-white shadow-lg transition-all active:translate-y-0.5 disabled:opacity-50 ${themeConfig.accentBg}`}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-black text-white shadow-lg transition-all active:translate-y-0.5 disabled:opacity-60 ${themeConfig.accentBg}`}
               >
-                {submitting
-                  ? "لطفاً صبر کنید..."
-                  : viewMode === "login"
-                  ? "ورود به حساب کاربری"
-                  : viewMode === "register"
-                  ? "ایجاد حساب دانشجو"
-                  : viewMode === "instructor"
-                  ? "ثبت درخواست مدرسی"
-                  : viewMode === "forgot"
-                  ? "ارسال کد بازیابی"
-                  : "تغییر رمز عبور"}
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>
+                  {submitting
+                    ? viewMode === "forgot"
+                      ? t.auth.sendingRecovery
+                      : t.auth.pleaseWait
+                    : viewMode === "login"
+                    ? t.auth.submitLogin
+                    : viewMode === "register"
+                    ? t.auth.submitRegister
+                    : viewMode === "instructor"
+                    ? t.auth.submitInstructor
+                    : t.auth.submitForgot}
+                </span>
               </button>
 
-              {(viewMode === "forgot" || viewMode === "reset") && (
+              {viewMode === "forgot" && (
                 <button
                   type="button"
                   onClick={() => {
                     setErrorMsg(null);
+                    setRecoverySentEmail(null);
                     setViewMode("login");
                   }}
                   className="w-full text-center text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 >
-                  بازگشت به صفحه ورود
+                  {t.auth.backToLogin}
                 </button>
               )}
             </form>

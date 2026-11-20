@@ -20,9 +20,17 @@ import { InteractiveRoadmaps } from "./components/home/InteractiveRoadmaps";
 import { LiveCodePlayground } from "./components/home/LiveCodePlayground";
 import { DailyChallengesSection } from "./components/home/DailyChallengesSection";
 import { NewsSection } from "./components/home/NewsSection";
+import { PasswordRecoveryModal } from "./components/auth/PasswordRecoveryModal";
+import { LiveNotificationToast } from "./components/layout/LiveNotificationToast";
+import { FloatingPreferencesPill } from "./components/layout/FloatingPreferencesPill";
+import {
+  CODEACADEMY_REALTIME_EVENT,
+  subscribeToPlatformRealtime,
+  type RealtimeUpdateDetail,
+} from "./lib/realtimeSync";
 
 function DedicatedSectionPage({ children }: { children: React.ReactNode }) {
-  return <div className="py-12 pb-20">{children}</div>;
+  return <div className="py-10 pb-20">{children}</div>;
 }
 
 function AppRoutes() {
@@ -91,16 +99,42 @@ function AppRoutes() {
 }
 
 function AppShell() {
-  const { settings } = useAuth();
-  const { prefs } = useUserPreferences();
+  const { settings, refreshBootstrap } = useAuth();
+  const { prefs, isRtl } = useUserPreferences();
+  const { pathname } = useRouter();
+  const cleanPath = pathname.replace(/\/+$/, "") || "/";
+  const isHomeRoute = cleanPath === "/";
+
+  React.useEffect(() => {
+    const unsubscribe = subscribeToPlatformRealtime();
+    const handleRealtime = (ev: Event) => {
+      const detail = (ev as CustomEvent<RealtimeUpdateDetail>).detail;
+      if (
+        detail &&
+        (detail.table === "site_settings" ||
+          detail.table === "categories" ||
+          detail.table === "courses" ||
+          detail.table === "course_reviews")
+      ) {
+        void refreshBootstrap();
+      }
+    };
+    window.addEventListener(CODEACADEMY_REALTIME_EVENT, handleRealtime);
+    return () => {
+      unsubscribe();
+      window.removeEventListener(CODEACADEMY_REALTIME_EVENT, handleRealtime);
+    };
+  }, [refreshBootstrap]);
 
   return (
     <div
-      dir="rtl"
-      className="min-h-screen flex flex-col bg-[var(--site-bg)] text-slate-900 dark:text-slate-100 antialiased selection:bg-[var(--accent-500)] selection:text-white"
+      dir={isRtl ? "rtl" : "ltr"}
+      className="relative isolate min-h-screen w-full max-w-full overflow-x-clip flex flex-col bg-transparent text-slate-900 dark:text-slate-100 antialiased selection:bg-[var(--accent-500)] selection:text-white"
     >
+      <Header />
+      <LiveNotificationToast />
       {settings.showAnnouncementBar && settings.announcementText.trim() && (
-        <div className="bg-gradient-to-l from-[var(--accent-700)] via-[var(--accent-600)] to-[var(--accent-500)] px-4 py-2 text-center text-xs font-bold text-white">
+        <div className="mt-16 bg-gradient-to-l from-[var(--accent-700)] via-[var(--accent-600)] to-[var(--accent-500)] px-4 py-2 text-center text-xs font-bold text-white">
           {settings.announcementLink ? (
             <Link
               href={settings.announcementLink}
@@ -113,14 +147,21 @@ function AppShell() {
           )}
         </div>
       )}
-      <Header />
-      <main className="flex-1">
+      <main
+        className={`flex-1 w-full max-w-full ${
+          isHomeRoute ? "pt-0" : "pt-16 sm:pt-20 lower-emerald-cyber-bg"
+        }`}
+      >
         <AppRoutes />
       </main>
-      <Footer />
+      <div className="lower-emerald-cyber-bg w-full max-w-full">
+        <Footer />
+      </div>
+      <FloatingPreferencesPill />
+      <PasswordRecoveryModal />
       <Toaster
-        position="bottom-left"
-        dir="rtl"
+        position="bottom-right"
+        dir={isRtl ? "rtl" : "ltr"}
         theme={prefs.mode}
         richColors
         toastOptions={{

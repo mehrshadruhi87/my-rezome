@@ -625,6 +625,7 @@ export interface SupabaseInstructorRow {
   specialty: string;
   bio: string;
   status: string;
+  rejection_reason?: string | null;
   created_at: string;
 }
 
@@ -636,9 +637,7 @@ export async function fetchAllSupabaseInstructors(): Promise<
   try {
     const { data, error } = await client
       .from("instructors")
-      .select(
-        "id, user_id, name, email, phone, specialty, bio, status, created_at"
-      )
+      .select("*")
       .order("created_at", { ascending: false });
     if (error) return { ok: false, code: error.code, message: error.message };
     return { ok: true, data: (data as SupabaseInstructorRow[] | null) ?? [] };
@@ -659,9 +658,7 @@ export async function insertSupabaseInstructor(
     const { data, error } = await client
       .from("instructors")
       .insert(row)
-      .select(
-        "id, user_id, name, email, phone, specialty, bio, status, created_at"
-      )
+      .select("*")
       .single();
     if (error) return { ok: false, code: error.code, message: error.message };
     return { ok: true, data: (data as SupabaseInstructorRow) ?? row };
@@ -675,20 +672,40 @@ export async function insertSupabaseInstructor(
 
 export async function updateSupabaseInstructorStatus(
   id: string,
-  status: string
+  status: string,
+  rejectionReason?: string | null
 ): Promise<SupabaseResult<SupabaseInstructorRow | null>> {
   const client = getSupabaseClient();
   if (!client) return { ok: false, message: "Supabase client disabled" };
   try {
+    const payload: Record<string, unknown> = { status };
+    if (rejectionReason !== undefined) {
+      payload.rejection_reason = rejectionReason;
+    }
     const { data, error } = await client
       .from("instructors")
-      .update({ status })
+      .update(payload)
       .eq("id", id)
-      .select(
-        "id, user_id, name, email, phone, specialty, bio, status, created_at"
-      )
+      .select("*")
       .maybeSingle();
-    if (error) return { ok: false, code: error.code, message: error.message };
+    if (error) {
+      // Fallback if rejection_reason column hasn't been added yet
+      if (rejectionReason !== undefined) {
+        const retry = await client
+          .from("instructors")
+          .update({ status })
+          .eq("id", id)
+          .select("*")
+          .maybeSingle();
+        if (!retry.error) {
+          return {
+            ok: true,
+            data: (retry.data as SupabaseInstructorRow | null) ?? null,
+          };
+        }
+      }
+      return { ok: false, code: error.code, message: error.message };
+    }
     return { ok: true, data: (data as SupabaseInstructorRow | null) ?? null };
   } catch (err) {
     return {
@@ -795,6 +812,259 @@ export async function deleteSupabaseNews(
     return {
       ok: false,
       message: err instanceof Error ? err.message : "Supabase delete failed",
+    };
+  }
+}
+
+// --- COURSE REVIEWS (public.course_reviews + local cache + session fallback) ---
+export interface SupabaseCourseReviewRow {
+  id: string;
+  course_id: string;
+  user_id: string;
+  user_name: string;
+  author_role?: string;
+  rating: number;
+  comment: string;
+  status?: string;
+  created_at: string;
+}
+
+const LOCAL_COURSE_REVIEWS_KEY = "codeacademy_course_reviews_v1";
+const SESSION_USER_FALLBACK_KEY = "codeacademy_session_user_v1";
+
+export function readFallbackSessionUser(): PublicUser | null {
+  if (typeof window === "undefined") return null;
+
+  const storages: Storage[] = [];
+  try {
+    storages.push(window.localStorage);
+  } catch {
+    // Ignore storage restriction
+  }
+  try {
+    storages.push(window.sessionStorage);
+  } catch {
+    // Ignore storage restriction
+  }
+
+  for (const store of storages) {
+    try {
+      const raw = store.getItem(SESSION_USER_FALLBACK_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<PublicUser> | null;
+        if (parsed && parsed.id && (parsed.email || parsed.name)) {
+          return {
+            id: String(parsed.id),
+            name: String(parsed.name || parsed.email?.split("@")[0] || "کاربر"),
+            email: String(parsed.email || "").toLowerCase().trim(),
+            role: normalizeRole(parsed.role),
+            phone: parsed.phone ?? null,
+            bio: parsed.bio ?? null,
+            isActive: parsed.isActive ?? true,
+            isEmailVerified: parsed.isEmailVerified ?? true,
+            createdAt: parsed.createdAt || new Date().toISOString(),
+          };
+        }
+      }
+    } catch {
+      // Ignore malformed cached session JSON
+    }
+
+    // Fallback: inspect Supabase Auth persisted session key (sb-*-auth-token)
+    try {
+      for (let i = 0; i < store.length; i += 1) {
+        const key = store.key(i);
+        if (!key || !/^sb-.*-auth-token$/i.test(key)) continue;
+        const raw = store.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as {
+          user?: {
+            id?: string;
+            email?: string;
+            created_at?: string;
+            user_metadata?: Record<string, unknown>;
+          };
+          currentSession?: {
+            user?: {
+              id?: string;
+              email?: string;
+              created_at?: string;
+              user_metadata?: Record<string, unknown>;
+            };
+          };
+        };
+        const sbUser = parsed?.user ?? parsed?.currentSession?.user;
+        if (sbUser?.id) {
+          const meta = sbUser.user_metadata ?? {};
+          const email = String(sbUser.email || "").toLowerCase().trim();
+          const fullName = String(
+            meta.full_name ?? meta.name ?? (email ? email.split("@")[0] : "کاربر")
+          ).trim();
+          const role =
+            email === "mehrshadruhi87@gmail.com"
+              ? "ADMIN"
+              : normalizeRole(meta.role);
+          return {
+            id: String(sbUser.id),
+            name: fullName || "کاربر",
+            email,
+            role,
+            phone: meta.phone ? String(meta.phone) : null,
+            bio: meta.bio ? String(meta.bio) : null,
+            isActive: true,
+            isEmailVerified: true,
+            createdAt: sbUser.created_at || new Date().toISOString(),
+          };
+        }
+      }
+    } catch {
+      // Ignore storage inspection issues
+    }
+  }
+
+  return null;
+}
+
+export function loadCourseReviewsFromLocalCache(
+  courseId: string
+): SupabaseCourseReviewRow[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_COURSE_REVIEWS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as SupabaseCourseReviewRow[]).filter(
+      (r) => r && String(r.course_id) === String(courseId)
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function saveCourseReviewToLocalCache(
+  row: SupabaseCourseReviewRow
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_COURSE_REVIEWS_KEY);
+    const existing: SupabaseCourseReviewRow[] = raw
+      ? ((JSON.parse(raw) as SupabaseCourseReviewRow[]) ?? [])
+      : [];
+    const filtered = Array.isArray(existing)
+      ? existing.filter((r) => r.id !== row.id)
+      : [];
+    filtered.unshift(row);
+    window.localStorage.setItem(
+      LOCAL_COURSE_REVIEWS_KEY,
+      JSON.stringify(filtered.slice(0, 200))
+    );
+  } catch {
+    // Ignore localStorage quota/iframe errors
+  }
+}
+
+export async function fetchSupabaseCourseReviewsForCourse(
+  courseId: string
+): Promise<SupabaseResult<SupabaseCourseReviewRow[]>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+
+  try {
+    const { data, error } = await client
+      .from("course_reviews")
+      .select("*")
+      .eq("course_id", courseId)
+      .order("created_at", { ascending: false });
+
+    if (!error) {
+      return {
+        ok: true,
+        data: (data as SupabaseCourseReviewRow[] | null) ?? [],
+      };
+    }
+  } catch {
+    // Fall through to legacy reviews table
+  }
+
+  const legacy = await fetchSupabaseReviewsByCourse(courseId);
+  if (legacy.ok) {
+    return { ok: true, data: legacy.data };
+  }
+  return { ok: false, message: legacy.message };
+}
+
+export async function insertSupabaseCourseReviewRecord(
+  row: SupabaseCourseReviewRow
+): Promise<SupabaseResult<SupabaseCourseReviewRow>> {
+  const client = getSupabaseClient();
+  if (!client) return { ok: false, message: "Supabase client disabled" };
+
+  const basePayload = {
+    course_id: row.course_id,
+    user_id: row.user_id,
+    user_name: row.user_name,
+    rating: Math.min(5, Math.max(1, Number(row.rating) || 5)),
+    comment: row.comment,
+  };
+
+  // 1. Try inserting into public.course_reviews with explicit id & created_at
+  try {
+    const { data, error } = await client
+      .from("course_reviews")
+      .insert({
+        id: row.id,
+        ...basePayload,
+        created_at: row.created_at,
+      })
+      .select("*")
+      .maybeSingle();
+
+    if (!error) {
+      return {
+        ok: true,
+        data: (data as SupabaseCourseReviewRow | null) ?? row,
+      };
+    }
+
+    // 2. Retry without id/created_at in case table uses auto-generated UUID/serial id or strict defaults
+    const retry = await client
+      .from("course_reviews")
+      .insert(basePayload)
+      .select("*")
+      .maybeSingle();
+
+    if (!retry.error) {
+      return {
+        ok: true,
+        data: (retry.data as SupabaseCourseReviewRow | null) ?? row,
+      };
+    }
+  } catch {
+    // Fall through to legacy reviews table
+  }
+
+  // 3. Fallback to legacy public.reviews table
+  try {
+    const legacy = await insertSupabaseReview({
+      id: row.id,
+      course_id: row.course_id,
+      user_id: row.user_id,
+      user_name: row.user_name,
+      author_role: row.author_role || "STUDENT",
+      rating: basePayload.rating,
+      comment: row.comment,
+      status: row.status || "APPROVED",
+      created_at: row.created_at,
+    });
+    if (legacy.ok) {
+      return { ok: true, data: legacy.data };
+    }
+    return { ok: false, code: legacy.code, message: legacy.message };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Supabase insert failed",
     };
   }
 }

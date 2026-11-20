@@ -731,7 +731,7 @@ export function AdminSettingsTab() {
             />
             <ToggleRow
               id="toggle-roadmaps"
-              label="نمایش نقشه‌های راه یادگیری"
+              label="نمایش مسیرهای یادگیری"
               description="بخش مسیرهای صفر تا استخدام در صفحه اصلی"
               checked={draft.showRoadmapsSection}
               onChange={(v) => updateDraft("showRoadmapsSection", v)}

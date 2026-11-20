@@ -1,5 +1,6 @@
 import type {
   CategoryItem,
+  ContentSubmissionItem,
   CourseDetail,
   CourseLevel,
   CourseSummary,
@@ -7,11 +8,13 @@ import type {
   InstructorApplication,
   InstructorStatus,
   LessonAttachmentItem,
+  ModerationStatus,
   NewsArticle,
   OrderRecord,
   OrderStatus,
   PlatformSettings,
   PublicUser,
+  SubmissionType,
   UserRole,
 } from "../types";
 import { generateSlug } from "../utils/formatters";
@@ -54,6 +57,31 @@ import {
   updateSupabaseUserById,
   type SupabaseUserRow,
 } from "./supabaseStore";
+import {
+  deleteSupabaseCategory,
+  deleteSupabaseCourse,
+  deleteSupabaseDiscountCode,
+  fetchAllSupabaseCategories,
+  fetchAllSupabaseCourses,
+  fetchAllSupabaseDiscountCodes,
+  fetchAllSupabaseSubmissions,
+  fetchSupabaseSiteSettings,
+  isCoursePubliclyVisible,
+  normalizeModerationStatus,
+  saveSupabaseSiteSettings,
+  upsertSupabaseCategory,
+  upsertSupabaseCourse,
+  upsertSupabaseDiscountCode,
+  upsertSupabaseSubmission,
+  type SupabaseCourseRow,
+} from "./supabaseAdminSync";
+import {
+  computeCourseRatingStats,
+  fetchAllSupabaseCourseReviews,
+  fetchSupabaseCourseReviewsByCourse,
+  insertSupabaseCourseReview,
+} from "./courseReviews";
+import { dispatchRealtimeUpdate } from "./realtimeSync";
 
 export const DB_STORAGE_KEY = "codeacademy_db_v1";
 export const AUTH_TOKEN_KEY = "codeacademy_auth_token";
@@ -148,6 +176,8 @@ export interface DbCourse {
   instructorBio: string;
   isPublished: boolean;
   isFeatured: boolean;
+  moderationStatus?: ModerationStatus;
+  rejectionReason?: string | null;
   studentsCount: number;
   rating: number;
   categoryId: string;
@@ -205,6 +235,7 @@ export interface DatabaseSchema {
   discountCodes: DiscountCodeItem[];
   instructors: InstructorApplication[];
   news: NewsArticle[];
+  contentSubmissions: ContentSubmissionItem[];
   settings: PlatformSettings;
 }
 
@@ -415,7 +446,7 @@ export function buildSeedData(): DatabaseSchema {
           lessons: [
             {
               id: "ls_nx_1",
-              title: "معرفی دوره، نقشه راه و بررسی پروژه نهایی",
+              title: "معرفی دوره، مسیر یادگیری و بررسی پروژه نهایی",
               duration: "۱۸:۲۰",
               videoUrl: "",
               isFree: true,
@@ -556,7 +587,7 @@ export function EnrollButton({ initialCount }: { initialCount: number }) {
           lessons: [
             {
               id: "ls_ai_1",
-              title: "نقشه راه مهندسی AI و آماده‌سازی محیط Jupyter و CUDA",
+              title: "مسیر یادگیری مهندسی AI و آماده‌سازی محیط Jupyter و CUDA",
               duration: "۲۲:۰۰",
               videoUrl: "",
               isFree: true,
@@ -996,6 +1027,7 @@ RUN npm ci --omit=dev`,
     discountCodes,
     instructors,
     news,
+    contentSubmissions: [],
     settings: { ...DEFAULT_PLATFORM_SETTINGS },
   };
 }
@@ -1049,6 +1081,16 @@ function migrateSchemaExtensions(db: DatabaseSchema): boolean {
     db.news = seed.news;
     changed = true;
   }
+  if (!Array.isArray(db.contentSubmissions)) {
+    db.contentSubmissions = [];
+    changed = true;
+  }
+  for (const crs of db.courses) {
+    if (!crs.moderationStatus) {
+      crs.moderationStatus = "approved";
+      changed = true;
+    }
+  }
 
   // Ensure UI/UX & Figma and WordPress departments exist in existing local caches
   for (const requiredSlug of ["ui-ux-figma", "wordpress"]) {
@@ -1058,6 +1100,31 @@ function migrateSchemaExtensions(db: DatabaseSchema): boolean {
         db.categories.push(cat);
         changed = true;
       }
+    }
+  }
+
+  // Migrate legacy Hero defaults (removing BAHAR30 promo kicker above headline and updating main H1/subtitle)
+  if (db.settings) {
+    if (
+      db.settings.heroKicker &&
+      db.settings.heroKicker.includes("BAHAR30")
+    ) {
+      db.settings.heroKicker = DEFAULT_PLATFORM_SETTINGS.heroKicker;
+      changed = true;
+    }
+    if (
+      db.settings.heroTitle ===
+      "مهندسی نرم‌افزار را در مقیاس شرکت‌های تراز اول تجربه کنید"
+    ) {
+      db.settings.heroTitle = DEFAULT_PLATFORM_SETTINGS.heroTitle;
+      changed = true;
+    }
+    if (
+      db.settings.heroSubtitle ===
+      "آموزش عمیق و ۱۰۰٪ پروژه‌محور برنامه‌نویسی، هوش مصنوعی، معماری بک‌اند و امنیت شبکه به همراه منتورشیپ مستقیم و بازبینی کد."
+    ) {
+      db.settings.heroSubtitle = DEFAULT_PLATFORM_SETTINGS.heroSubtitle;
+      changed = true;
     }
   }
 
@@ -1119,6 +1186,7 @@ function serializeCourseSummary(
   db: DatabaseSchema
 ): CourseSummary {
   const cat = db.categories.find((c) => c.id === course.categoryId);
+  const ratingStats = computeCourseRatingStats(db.reviews, course.id);
   return {
     id: course.id,
     title: course.title,
@@ -1142,15 +1210,209 @@ function serializeCourseSummary(
     instructorName: course.instructorName,
     instructorTitle: course.instructorTitle,
     studentsCount: course.studentsCount,
-    rating: course.rating,
+    rating: ratingStats.averageRating ?? 0,
+    reviewCount: ratingStats.reviewCount,
     isPublished: course.isPublished,
     isFeatured: course.isFeatured,
+    moderationStatus: normalizeModerationStatus(
+      course.moderationStatus,
+      "approved"
+    ),
+    rejectionReason: course.rejectionReason ?? null,
     categoryId: course.categoryId,
     category: cat
       ? { id: cat.id, name: cat.name, slug: cat.slug }
       : { id: course.categoryId, name: "برنامه‌نویسی", slug: "general" },
     createdAt: course.createdAt,
   };
+}
+
+function toSupabaseCourseRow(course: DbCourse): SupabaseCourseRow {
+  return {
+    id: course.id,
+    title: course.title,
+    slug: course.slug,
+    short_desc: course.shortDesc,
+    description: course.description,
+    thumbnail: course.thumbnail,
+    preview_video_url: course.previewVideoUrl,
+    price: course.price,
+    discount_price: course.discountPrice,
+    full_access: Boolean(course.fullAccess),
+    instructor_share_percent:
+      typeof course.instructorSharePercent === "number"
+        ? course.instructorSharePercent
+        : 70,
+    instructor_discount_percent:
+      typeof course.instructorDiscountPercent === "number"
+        ? course.instructorDiscountPercent
+        : 0,
+    instructor_id: course.instructorId ?? null,
+    instructor_name: course.instructorName,
+    instructor_title: course.instructorTitle,
+    instructor_bio: course.instructorBio,
+    level: course.level,
+    duration: course.duration,
+    prerequisites: course.prerequisites,
+    language: course.language,
+    students_count: course.studentsCount,
+    rating: course.rating,
+    is_published: Boolean(course.isPublished),
+    is_featured: Boolean(course.isFeatured),
+    status: normalizeModerationStatus(course.moderationStatus, "approved"),
+    rejection_reason: course.rejectionReason ?? null,
+    category_id: course.categoryId,
+    chapters: course.chapters,
+    created_at: course.createdAt,
+    updated_at: course.updatedAt,
+  };
+}
+
+function fromSupabaseCourseRow(row: SupabaseCourseRow): DbCourse {
+  const levelStr = String(row.level || "ALL_LEVELS");
+  const validLevel: CourseLevel =
+    levelStr === "BEGINNER" ||
+    levelStr === "INTERMEDIATE" ||
+    levelStr === "ADVANCED" ||
+    levelStr === "ALL_LEVELS"
+      ? levelStr
+      : "ALL_LEVELS";
+  return {
+    id: String(row.id),
+    title: String(row.title || "دوره آموزشی"),
+    slug: String(row.slug || row.id),
+    shortDesc: String(row.short_desc || ""),
+    description: String(row.description || ""),
+    thumbnail:
+      String(row.thumbnail || "") ||
+      "/src/assets/images/course_nextjs_fullstack_1794952831549.jpg",
+    previewVideoUrl: String(row.preview_video_url || ""),
+    price: Number(row.price) || 0,
+    discountPrice:
+      row.discount_price !== null && row.discount_price !== undefined
+        ? Number(row.discount_price)
+        : null,
+    fullAccess: Boolean(row.full_access),
+    instructorSharePercent:
+      typeof row.instructor_share_percent === "number"
+        ? row.instructor_share_percent
+        : 70,
+    instructorDiscountPercent:
+      typeof row.instructor_discount_percent === "number"
+        ? row.instructor_discount_percent
+        : 0,
+    instructorId: row.instructor_id ?? null,
+    instructorName: String(row.instructor_name || "مدرس کدآکادمی"),
+    instructorTitle: String(row.instructor_title || "مهندس نرم‌افزار"),
+    instructorBio: String(row.instructor_bio || ""),
+    level: validLevel,
+    duration: String(row.duration || "۲۰ ساعت"),
+    prerequisites: String(row.prerequisites || ""),
+    language: String(row.language || "فارسی"),
+    studentsCount: Number(row.students_count) || 0,
+    rating: Number(row.rating) || 5.0,
+    isPublished: Boolean(row.is_published),
+    isFeatured: Boolean(row.is_featured),
+    moderationStatus: normalizeModerationStatus(row.status, "approved"),
+    rejectionReason: row.rejection_reason ?? null,
+    categoryId: String(row.category_id || "cat_frontend"),
+    chapters: Array.isArray(row.chapters) ? (row.chapters as DbChapter[]) : [],
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+async function hydrateCatalogFromSupabase(
+  db: DatabaseSchema,
+  storage: StorageAdapter
+): Promise<void> {
+  const [coursesRes, catsRes, couponsRes, settingsRes, subsRes, reviewsRes] =
+    await Promise.all([
+      fetchAllSupabaseCourses(),
+      fetchAllSupabaseCategories(),
+      fetchAllSupabaseDiscountCodes(),
+      fetchSupabaseSiteSettings(),
+      fetchAllSupabaseSubmissions(),
+      fetchAllSupabaseCourseReviews(),
+    ]);
+
+  let changed = false;
+
+  if (catsRes.ok && catsRes.data.length > 0) {
+    for (const remoteCat of catsRes.data) {
+      const idx = db.categories.findIndex((c) => c.id === remoteCat.id);
+      if (idx !== -1) {
+        db.categories[idx] = remoteCat;
+      } else {
+        db.categories.push(remoteCat);
+      }
+    }
+    changed = true;
+  }
+
+  if (coursesRes.ok && coursesRes.data.length > 0) {
+    for (const row of coursesRes.data) {
+      const mapped = fromSupabaseCourseRow(row);
+      const idx = db.courses.findIndex((c) => c.id === mapped.id);
+      if (idx !== -1) {
+        db.courses[idx] = mapped;
+      } else {
+        db.courses.unshift(mapped);
+      }
+    }
+    changed = true;
+  }
+
+  if (couponsRes.ok && couponsRes.data.length > 0) {
+    for (const remoteCoupon of couponsRes.data) {
+      const idx = db.discountCodes.findIndex((d) => d.id === remoteCoupon.id);
+      if (idx !== -1) {
+        db.discountCodes[idx] = remoteCoupon;
+      } else {
+        db.discountCodes.unshift(remoteCoupon);
+      }
+    }
+    changed = true;
+  }
+
+  if (settingsRes.ok && settingsRes.data) {
+    db.settings = mergePlatformSettings({
+      ...db.settings,
+      ...settingsRes.data,
+    });
+    changed = true;
+  }
+
+  if (subsRes.ok && subsRes.data.length > 0) {
+    for (const remoteSub of subsRes.data) {
+      const idx = db.contentSubmissions.findIndex((s) => s.id === remoteSub.id);
+      if (idx !== -1) {
+        db.contentSubmissions[idx] = remoteSub;
+      } else {
+        db.contentSubmissions.unshift(remoteSub);
+      }
+    }
+    changed = true;
+  }
+
+  if (reviewsRes.ok && reviewsRes.data.length > 0) {
+    for (const remoteRev of reviewsRes.data) {
+      const idx = db.reviews.findIndex((r) => r.id === remoteRev.id);
+      if (idx !== -1) {
+        db.reviews[idx] = {
+          ...db.reviews[idx],
+          ...remoteRev,
+        };
+      } else {
+        db.reviews.unshift(remoteRev);
+      }
+    }
+    changed = true;
+  }
+
+  if (changed) {
+    writeLocalDb(db, storage);
+  }
 }
 
 export class LocalApiError extends Error {
@@ -1203,6 +1465,135 @@ function writeCachedSessionUser(
     createdAt: user.createdAt,
   };
   storage.setItem(SESSION_USER_KEY, JSON.stringify(payload));
+}
+
+export function syncSupabaseAuthSessionToLocalStore(
+  user: PublicUser | null,
+  externalEnrolledCourseIds: string[] = [],
+  storage: StorageAdapter = getDefaultStorage()
+): string[] {
+  if (!user) {
+    storage.removeItem(AUTH_TOKEN_KEY);
+    storage.removeItem(SESSION_USER_KEY);
+    return [];
+  }
+
+  const db = readLocalDb(storage);
+  const normalizedEmail = user.email.toLowerCase().trim();
+  const existingIdx = db.users.findIndex(
+    (u) => u.id === user.id || u.email.toLowerCase() === normalizedEmail
+  );
+
+  const previousId = existingIdx !== -1 ? db.users[existingIdx].id : null;
+  const existingUser = existingIdx !== -1 ? db.users[existingIdx] : null;
+
+  const syncedDbUser: DbUser = {
+    id: user.id,
+    name: user.name,
+    email: normalizedEmail,
+    username: user.username ?? existingUser?.username ?? null,
+    passwordHash: existingUser?.passwordHash ?? "",
+    role:
+      normalizedEmail === ADMIN_EMAIL
+        ? "ADMIN"
+        : user.role !== "STUDENT"
+        ? user.role
+        : existingUser?.role ?? "STUDENT",
+    phone: user.phone ?? existingUser?.phone ?? null,
+    bio: user.bio ?? existingUser?.bio ?? null,
+    isActive: true,
+    isEmailVerified: user.isEmailVerified ?? true,
+    instructorStatus:
+      user.instructorStatus ?? existingUser?.instructorStatus ?? null,
+    createdAt: user.createdAt || existingUser?.createdAt || new Date().toISOString(),
+  };
+
+  if (existingIdx !== -1) {
+    db.users[existingIdx] = syncedDbUser;
+    if (previousId && previousId !== user.id) {
+      for (const enr of db.enrollments) {
+        if (enr.userId === previousId) enr.userId = user.id;
+      }
+      for (const ord of db.orders) {
+        if (ord.userId === previousId) ord.userId = user.id;
+      }
+      for (const rev of db.reviews) {
+        if (rev.userId === previousId) rev.userId = user.id;
+      }
+      for (const inst of db.instructors) {
+        if (inst.userId === previousId) inst.userId = user.id;
+      }
+    }
+  } else {
+    db.users.push(syncedDbUser);
+  }
+
+  const normalizedExternal = normalizeEnrolledCourses(externalEnrolledCourseIds);
+  for (const courseId of normalizedExternal) {
+    const exists = db.enrollments.some(
+      (e) => e.userId === user.id && e.courseId === courseId
+    );
+    if (!exists) {
+      db.enrollments.push({
+        id: createId("enr"),
+        userId: user.id,
+        courseId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  const mergedEnrolled = mergeEnrolledCourses(
+    normalizedExternal,
+    db.enrollments.filter((e) => e.userId === user.id).map((e) => e.courseId)
+  );
+
+  writeLocalDb(db, storage);
+  storage.setItem(AUTH_TOKEN_KEY, signLocalToken(user.id));
+  writeCachedSessionUser(storage, toPublicUser(syncedDbUser), mergedEnrolled);
+  return mergedEnrolled;
+}
+
+export async function recordInstructorApplicationForSupabaseUser(
+  payload: {
+    userId: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    specialty: string;
+    bio?: string;
+  },
+  storage: StorageAdapter = getDefaultStorage()
+): Promise<InstructorApplication> {
+  const db = readLocalDb(storage);
+  const createdAt = new Date().toISOString();
+  const application: InstructorApplication = {
+    id: generateUuid(),
+    userId: payload.userId,
+    name: payload.name.trim(),
+    email: payload.email.toLowerCase().trim(),
+    phone: payload.phone ? payload.phone.trim() : null,
+    specialty: payload.specialty.trim(),
+    bio: (payload.bio ?? "").trim(),
+    status: "pending",
+    createdAt,
+  };
+
+  await insertSupabaseInstructor({
+    id: application.id,
+    user_id: application.userId,
+    name: application.name,
+    email: application.email,
+    phone: application.phone,
+    specialty: application.specialty,
+    bio: application.bio,
+    status: "pending",
+    created_at: createdAt,
+  });
+
+  db.instructors.unshift(application);
+  writeLocalDb(db, storage);
+  return application;
 }
 
 function syncSupabaseUserRowIntoDb(
@@ -1405,6 +1796,7 @@ export async function dispatchLocalApiRequest<T>(
 
   // --- BOOTSTRAP ---
   if (method === "GET" && pathname === "/api/bootstrap") {
+    await hydrateCatalogFromSupabase(db, storage);
     const { user, enrolledCourseIds } = await resolveLiveAuthenticatedSession(
       db,
       storage,
@@ -1413,7 +1805,7 @@ export async function dispatchLocalApiRequest<T>(
     const categories = db.categories.map((cat) => ({
       ...cat,
       coursesCount: db.courses.filter(
-        (c) => c.categoryId === cat.id && c.isPublished
+        (c) => c.categoryId === cat.id && isCoursePubliclyVisible(c)
       ).length,
     }));
     return {
@@ -1909,6 +2301,7 @@ export async function dispatchLocalApiRequest<T>(
 
   // --- COURSES PUBLIC ---
   if (method === "GET" && pathname === "/api/courses/search") {
+    await hydrateCatalogFromSupabase(db, storage);
     const q = (params.get("q") ?? "").trim().toLowerCase();
     if (q.length < 2) {
       return { courses: [] } as T;
@@ -1916,7 +2309,7 @@ export async function dispatchLocalApiRequest<T>(
     const matches = db.courses
       .filter(
         (c) =>
-          c.isPublished &&
+          isCoursePubliclyVisible(c) &&
           (c.title.toLowerCase().includes(q) ||
             c.shortDesc.toLowerCase().includes(q) ||
             c.instructorName.toLowerCase().includes(q))
@@ -1927,6 +2320,7 @@ export async function dispatchLocalApiRequest<T>(
   }
 
   if (method === "GET" && pathname === "/api/courses") {
+    await hydrateCatalogFromSupabase(db, storage);
     const categorySlug = (params.get("category") ?? "").trim();
     const level = (params.get("level") ?? "").trim();
     const priceType = (params.get("price") ?? "").trim();
@@ -1936,11 +2330,24 @@ export async function dispatchLocalApiRequest<T>(
     const includeUnpublished = params.get("includeUnpublished") === "true";
 
     const user = getAuthenticatedUser(db, storage, headers);
-    const canSeeUnpublished = includeUnpublished && user?.role === "ADMIN";
+    const isAdminViewer =
+      includeUnpublished &&
+      user?.role === "ADMIN" &&
+      user.email.toLowerCase() === ADMIN_EMAIL;
+    const isInstructorViewer =
+      includeUnpublished && user?.role === "INSTRUCTOR";
 
-    let filtered = db.courses.filter((c) =>
-      canSeeUnpublished ? true : c.isPublished
-    );
+    let filtered = db.courses.filter((c) => {
+      if (isAdminViewer) return true;
+      if (isInstructorViewer && user) {
+        return (
+          isCoursePubliclyVisible(c) ||
+          c.instructorId === user.id ||
+          c.instructorName.toLowerCase() === user.name.toLowerCase()
+        );
+      }
+      return isCoursePubliclyVisible(c);
+    });
     if (featured) {
       filtered = filtered.filter((c) => c.isFeatured);
     }
@@ -2017,7 +2424,7 @@ export async function dispatchLocalApiRequest<T>(
       createdAt,
     };
 
-    await insertSupabaseReview({
+    await insertSupabaseCourseReview({
       id: reviewId,
       course_id: review.courseId,
       user_id: review.userId,
@@ -2029,23 +2436,22 @@ export async function dispatchLocalApiRequest<T>(
       created_at: createdAt,
     });
 
-    db.reviews.push(review);
-    const courseReviews = db.reviews.filter(
-      (r) => r.courseId === db.courses[courseIdx].id
-    );
-    const avg =
-      courseReviews.reduce((sum, r) => sum + r.rating, 0) / courseReviews.length;
-    db.courses[courseIdx].rating = Number(avg.toFixed(1));
+    db.reviews.unshift(review);
+    const stats = computeCourseRatingStats(db.reviews, db.courses[courseIdx].id);
+    db.courses[courseIdx].rating = stats.averageRating ?? 0;
     writeLocalDb(db, storage);
+    dispatchRealtimeUpdate("course_reviews", "INSERT");
     return {
       review: { ...review, userName: currentUser.name, authorRole },
       rating: db.courses[courseIdx].rating,
+      reviewCount: stats.reviewCount,
     } as T;
   }
 
   // GET /api/courses/:slug
   const courseDetailMatch = pathname.match(/^\/api\/courses\/([^/]+)$/);
   if (method === "GET" && courseDetailMatch) {
+    await hydrateCatalogFromSupabase(db, storage);
     const slugParam = decodeURIComponent(courseDetailMatch[1]);
     const { user, enrolledCourseIds } = await resolveLiveAuthenticatedSession(
       db,
@@ -2055,11 +2461,16 @@ export async function dispatchLocalApiRequest<T>(
     const course = db.courses.find(
       (c) => c.slug === slugParam || c.id === slugParam
     );
+    const isAdminPreview =
+      user?.role === "ADMIN" && user.email.toLowerCase() === ADMIN_EMAIL;
+    const isInstructorOwner =
+      user?.role === "INSTRUCTOR" &&
+      course &&
+      (course.instructorId === user.id ||
+        course.instructorName.toLowerCase() === user.name.toLowerCase());
     if (
       !course ||
-      (!course.isPublished &&
-        user?.role !== "ADMIN" &&
-        user?.role !== "INSTRUCTOR")
+      (!isCoursePubliclyVisible(course) && !isAdminPreview && !isInstructorOwner)
     ) {
       throw new LocalApiError("دوره مورد نظر یافت نشد.", 404);
     }
@@ -2070,44 +2481,37 @@ export async function dispatchLocalApiRequest<T>(
         ? enrolledCourseIds.includes(course.id) || user.role === "ADMIN"
         : false;
 
-    const sbRevRes = await fetchSupabaseReviewsByCourse(course.id);
-    const reviews =
-      sbRevRes.ok && sbRevRes.data.length > 0
-        ? sbRevRes.data
-            .filter((r) => String(r.status || "APPROVED") !== "REJECTED")
-            .map((r) => ({
-              id: String(r.id),
-              courseId: String(r.course_id),
-              userId: String(r.user_id),
-              userName: String(r.user_name || "کاربر کدآکادمی"),
-              authorRole: normalizeRole(r.author_role),
-              rating: Number(r.rating) || 5,
-              comment: String(r.comment || ""),
-              status: (r.status || "APPROVED") as
-                | "PENDING"
-                | "APPROVED"
-                | "REJECTED",
-              createdAt: r.created_at || new Date().toISOString(),
-            }))
-        : db.reviews
-            .filter(
-              (r) =>
-                r.courseId === course.id &&
-                (r.status ?? "APPROVED") !== "REJECTED"
-            )
-            .sort(
-              (a, b) =>
-                new Date(b.createdAt).getTime() -
-                new Date(a.createdAt).getTime()
-            )
-            .map((r) => {
-              const author = db.users.find((u) => u.id === r.userId);
-              return {
-                ...r,
-                userName: r.userName ?? author?.name ?? "کاربر کدآکادمی",
-                authorRole: r.authorRole ?? author?.role ?? "STUDENT",
-              };
-            });
+    const sbRevRes = await fetchSupabaseCourseReviewsByCourse(course.id);
+    if (sbRevRes.ok && sbRevRes.data.length > 0) {
+      for (const remoteRev of sbRevRes.data) {
+        const idx = db.reviews.findIndex((r) => r.id === remoteRev.id);
+        if (idx !== -1) {
+          db.reviews[idx] = { ...db.reviews[idx], ...remoteRev };
+        } else {
+          db.reviews.unshift(remoteRev);
+        }
+      }
+      writeLocalDb(db, storage);
+    }
+
+    const reviews = db.reviews
+      .filter(
+        (r) =>
+          r.courseId === course.id &&
+          (r.status ?? "APPROVED") !== "REJECTED"
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .map((r) => {
+        const author = db.users.find((u) => u.id === r.userId);
+        return {
+          ...r,
+          userName: r.userName ?? author?.name ?? "کاربر کدآکادمی",
+          authorRole: r.authorRole ?? author?.role ?? "STUDENT",
+        };
+      });
 
     const summary = serializeCourseSummary(course, db);
     const detail: CourseDetail = {
@@ -2516,6 +2920,8 @@ export async function dispatchLocalApiRequest<T>(
   // --- ADMIN / APPROVED INSTRUCTOR COURSES ---
   if (method === "POST" && pathname === "/api/admin/courses") {
     const actor = requireAdminOrApprovedInstructor(db, storage, headers);
+    const isSuperAdmin =
+      actor.role === "ADMIN" && actor.email.toLowerCase() === ADMIN_EMAIL;
     if (!body.title?.trim() || !body.categoryId) {
       throw new LocalApiError("عنوان دوره و دسته‌بندی الزامی است.", 400);
     }
@@ -2525,6 +2931,9 @@ export async function dispatchLocalApiRequest<T>(
       : baseSlug;
 
     const now = new Date().toISOString();
+    const moderationStatus: ModerationStatus = isSuperAdmin
+      ? normalizeModerationStatus(body.moderationStatus, "approved")
+      : "pending";
     const newCourse: DbCourse = {
       id: createId("crs"),
       title: String(body.title).trim(),
@@ -2542,7 +2951,7 @@ export async function dispatchLocalApiRequest<T>(
         Number(body.discountPrice) >= 0
           ? Number(body.discountPrice)
           : null,
-      fullAccess: Boolean(body.fullAccess ?? false),
+      fullAccess: isSuperAdmin ? Boolean(body.fullAccess ?? false) : false,
       instructorSharePercent:
         body.instructorSharePercent !== undefined
           ? Math.min(100, Math.max(0, Number(body.instructorSharePercent) || 70))
@@ -2571,8 +2980,10 @@ export async function dispatchLocalApiRequest<T>(
         body.instructorBio ||
           "مدرس و معمار سیستم‌های نرم‌افزاری با تجربه پروژه‌های مقیاس‌پذیر."
       ).trim(),
-      isPublished: Boolean(body.isPublished ?? true),
-      isFeatured: Boolean(body.isFeatured ?? false),
+      isPublished: isSuperAdmin ? Boolean(body.isPublished ?? true) : false,
+      isFeatured: isSuperAdmin ? Boolean(body.isFeatured ?? false) : false,
+      moderationStatus,
+      rejectionReason: null,
       studentsCount: 0,
       rating: 5.0,
       categoryId: String(body.categoryId),
@@ -2616,15 +3027,52 @@ export async function dispatchLocalApiRequest<T>(
     };
 
     db.courses.unshift(newCourse);
+    await upsertSupabaseCourse(toSupabaseCourseRow(newCourse));
+
+    let submission: ContentSubmissionItem | null = null;
+    if (!isSuperAdmin) {
+      const totalLessons = newCourse.chapters.reduce(
+        (sum, ch) => sum + ch.lessons.length,
+        0
+      );
+      submission = {
+        id: createId("sub"),
+        type: "course_create",
+        courseId: newCourse.id,
+        courseTitle: newCourse.title,
+        instructorId: actor.id,
+        instructorName: actor.name,
+        instructorEmail: actor.email,
+        summary: `درخواست انتشار دوره جدید (${newCourse.chapters.length} فصل و ${totalLessons} جلسه)`,
+        status: "pending",
+        rejectionReason: null,
+        payload: {
+          price: newCourse.price,
+          discountPrice: newCourse.discountPrice,
+          categoryId: newCourse.categoryId,
+        },
+        createdAt: now,
+        reviewedAt: null,
+      };
+      db.contentSubmissions.unshift(submission);
+      await upsertSupabaseSubmission(submission);
+    }
+
     writeLocalDb(db, storage);
-    return { course: serializeCourseSummary(newCourse, db) } as T;
+    return {
+      course: serializeCourseSummary(newCourse, db),
+      submission,
+      pendingApproval: !isSuperAdmin,
+    } as T;
   }
 
   const adminCourseDupMatch = pathname.match(
     /^\/api\/admin\/courses\/([^/]+)\/duplicate$/
   );
   if (method === "POST" && adminCourseDupMatch) {
-    requireAdminOrApprovedInstructor(db, storage, headers);
+    const actor = requireAdminOrApprovedInstructor(db, storage, headers);
+    const isSuperAdmin =
+      actor.role === "ADMIN" && actor.email.toLowerCase() === ADMIN_EMAIL;
     const id = decodeURIComponent(adminCourseDupMatch[1]);
     const existing = db.courses.find((c) => c.id === id);
     if (!existing) {
@@ -2638,6 +3086,9 @@ export async function dispatchLocalApiRequest<T>(
       slug: `${existing.slug}-copy-${Date.now().toString().slice(-4)}`,
       isPublished: false,
       isFeatured: false,
+      moderationStatus: isSuperAdmin ? "approved" : "pending",
+      rejectionReason: null,
+      instructorId: isSuperAdmin ? existing.instructorId ?? null : actor.id,
       studentsCount: 0,
       chapters: existing.chapters.map((ch) => ({
         ...ch,
@@ -2648,6 +3099,25 @@ export async function dispatchLocalApiRequest<T>(
       updatedAt: now,
     };
     db.courses.unshift(copy);
+    await upsertSupabaseCourse(toSupabaseCourseRow(copy));
+    if (!isSuperAdmin) {
+      const sub: ContentSubmissionItem = {
+        id: createId("sub"),
+        type: "course_create",
+        courseId: copy.id,
+        courseTitle: copy.title,
+        instructorId: actor.id,
+        instructorName: actor.name,
+        instructorEmail: actor.email,
+        summary: `کپی و ارسال دوره برای تأیید: ${copy.title}`,
+        status: "pending",
+        rejectionReason: null,
+        createdAt: now,
+        reviewedAt: null,
+      };
+      db.contentSubmissions.unshift(sub);
+      await upsertSupabaseSubmission(sub);
+    }
     writeLocalDb(db, storage);
     return { course: serializeCourseSummary(copy, db) } as T;
   }
@@ -2655,6 +3125,8 @@ export async function dispatchLocalApiRequest<T>(
   const adminCourseMatch = pathname.match(/^\/api\/admin\/courses\/([^/]+)$/);
   if (adminCourseMatch) {
     const actor = requireAdminOrApprovedInstructor(db, storage, headers);
+    const isSuperAdmin =
+      actor.role === "ADMIN" && actor.email.toLowerCase() === ADMIN_EMAIL;
     const id = decodeURIComponent(adminCourseMatch[1]);
 
     if (method === "GET") {
@@ -2667,10 +3139,75 @@ export async function dispatchLocalApiRequest<T>(
       const idx = db.courses.findIndex((c) => c.id === id);
       if (idx === -1) throw new LocalApiError("دوره یافت نشد.", 404);
       const existing = db.courses[idx];
+      if (
+        !isSuperAdmin &&
+        existing.instructorId &&
+        existing.instructorId !== actor.id
+      ) {
+        throw new LocalApiError("ویرایش دوره سایر مدرسان مجاز نیست.", 403);
+      }
+
       const cleanSlug = body.slug?.trim()
         ? generateSlug(body.slug)
         : existing.slug;
       const now = new Date().toISOString();
+
+      const nextChapters: DbChapter[] = Array.isArray(body.chapters)
+        ? body.chapters.map((ch: any, cIdx: number) => ({
+            id: ch.id || createId("ch"),
+            title: String(ch.title || `فصل ${cIdx + 1}`).trim(),
+            position: cIdx + 1,
+            lessons: Array.isArray(ch.lessons)
+              ? ch.lessons.map((les: any, lIdx: number) => {
+                  const lessonId = les.id || createId("ls");
+                  return {
+                    id: lessonId,
+                    title: String(les.title || `درس ${lIdx + 1}`).trim(),
+                    duration: String(les.duration || "۱۵:۰۰").trim(),
+                    videoUrl: String(les.videoUrl || "").trim(),
+                    isFree: Boolean(les.isFree),
+                    position: lIdx + 1,
+                    summary: String(
+                      les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
+                    ).trim(),
+                    codeSnippet: String(les.codeSnippet || "").trim(),
+                    attachments: Array.isArray(les.attachments)
+                      ? les.attachments.map((att: any) => ({
+                          id: att.id || createId("att"),
+                          lessonId,
+                          title: String(att.title || "فایل ضمیمه").trim(),
+                          fileUrl: String(att.fileUrl || "").trim(),
+                          fileType: String(att.fileType || "file"),
+                          fileSize: Number(att.fileSize) || 0,
+                          createdAt: att.createdAt || now,
+                        }))
+                      : [],
+                  };
+                })
+              : [],
+          }))
+        : existing.chapters;
+
+      const prevLessonCount = existing.chapters.reduce(
+        (sum, ch) => sum + ch.lessons.length,
+        0
+      );
+      const nextLessonCount = nextChapters.reduce(
+        (sum, ch) => sum + ch.lessons.length,
+        0
+      );
+      const chaptersChanged =
+        Array.isArray(body.chapters) &&
+        (nextLessonCount !== prevLessonCount ||
+          JSON.stringify(nextChapters) !== JSON.stringify(existing.chapters));
+
+      const nextModerationStatus: ModerationStatus = isSuperAdmin
+        ? normalizeModerationStatus(
+            body.moderationStatus ?? existing.moderationStatus,
+            "approved"
+          )
+        : "pending";
+
       db.courses[idx] = {
         ...existing,
         title: body.title ? String(body.title).trim() : existing.title,
@@ -2702,10 +3239,11 @@ export async function dispatchLocalApiRequest<T>(
               ? Number(body.discountPrice)
               : null
             : existing.discountPrice,
-        fullAccess:
-          body.fullAccess !== undefined
+        fullAccess: isSuperAdmin
+          ? body.fullAccess !== undefined
             ? Boolean(body.fullAccess)
-            : existing.fullAccess,
+            : existing.fullAccess
+          : existing.fullAccess,
         instructorSharePercent:
           body.instructorSharePercent !== undefined
             ? Math.min(
@@ -2733,62 +3271,76 @@ export async function dispatchLocalApiRequest<T>(
           ? String(body.instructorTitle).trim()
           : existing.instructorTitle,
         categoryId: body.categoryId || existing.categoryId,
-        isPublished:
-          body.isPublished !== undefined
+        isPublished: isSuperAdmin
+          ? body.isPublished !== undefined
             ? Boolean(body.isPublished)
-            : existing.isPublished,
-        isFeatured:
-          body.isFeatured !== undefined
+            : existing.isPublished
+          : false,
+        isFeatured: isSuperAdmin
+          ? body.isFeatured !== undefined
             ? Boolean(body.isFeatured)
-            : existing.isFeatured,
-        chapters: Array.isArray(body.chapters)
-          ? body.chapters.map((ch: any, cIdx: number) => ({
-              id: ch.id || createId("ch"),
-              title: String(ch.title || `فصل ${cIdx + 1}`).trim(),
-              position: cIdx + 1,
-              lessons: Array.isArray(ch.lessons)
-                ? ch.lessons.map((les: any, lIdx: number) => {
-                    const lessonId = les.id || createId("ls");
-                    return {
-                      id: lessonId,
-                      title: String(les.title || `درس ${lIdx + 1}`).trim(),
-                      duration: String(les.duration || "۱۵:۰۰").trim(),
-                      videoUrl: String(les.videoUrl || "").trim(),
-                      isFree: Boolean(les.isFree),
-                      position: lIdx + 1,
-                      summary: String(
-                        les.summary || "آموزش عملی و بررسی کدهای استاندارد تولید."
-                      ).trim(),
-                      codeSnippet: String(les.codeSnippet || "").trim(),
-                      attachments: Array.isArray(les.attachments)
-                        ? les.attachments.map((att: any) => ({
-                            id: att.id || createId("att"),
-                            lessonId,
-                            title: String(att.title || "فایل ضمیمه").trim(),
-                            fileUrl: String(att.fileUrl || "").trim(),
-                            fileType: String(att.fileType || "file"),
-                            fileSize: Number(att.fileSize) || 0,
-                            createdAt: att.createdAt || now,
-                          }))
-                        : [],
-                    };
-                  })
-                : [],
-            }))
-          : existing.chapters,
+            : existing.isFeatured
+          : false,
+        moderationStatus: nextModerationStatus,
+        rejectionReason: isSuperAdmin
+          ? body.rejectionReason !== undefined
+            ? body.rejectionReason
+            : existing.rejectionReason ?? null
+          : null,
+        chapters: nextChapters,
         updatedAt: now,
       };
+
+      await upsertSupabaseCourse(toSupabaseCourseRow(db.courses[idx]));
+
+      let submission: ContentSubmissionItem | null = null;
+      if (!isSuperAdmin) {
+        const submissionType: SubmissionType = chaptersChanged
+          ? "lesson_upload"
+          : "course_edit";
+        submission = {
+          id: createId("sub"),
+          type: submissionType,
+          courseId: db.courses[idx].id,
+          courseTitle: db.courses[idx].title,
+          instructorId: actor.id,
+          instructorName: actor.name,
+          instructorEmail: actor.email,
+          summary:
+            submissionType === "lesson_upload"
+              ? `آپلود/بروزرسانی ویدیو و سرفصل‌های دوره (${nextChapters.length} فصل، ${nextLessonCount} جلسه)`
+              : `ویرایش مشخصات یا قیمت‌گذاری دوره: ${db.courses[idx].title}`,
+          status: "pending",
+          rejectionReason: null,
+          payload: {
+            price: db.courses[idx].price,
+            discountPrice: db.courses[idx].discountPrice,
+            chaptersCount: nextChapters.length,
+            lessonsCount: nextLessonCount,
+          },
+          createdAt: now,
+          reviewedAt: null,
+        };
+        db.contentSubmissions.unshift(submission);
+        await upsertSupabaseSubmission(submission);
+      }
+
       writeLocalDb(db, storage);
-      return { course: serializeCourseSummary(db.courses[idx], db) } as T;
+      return {
+        course: serializeCourseSummary(db.courses[idx], db),
+        submission,
+        pendingApproval: !isSuperAdmin,
+      } as T;
     }
 
     if (method === "DELETE") {
-      if (actor.role !== "ADMIN") {
+      if (!isSuperAdmin) {
         const target = db.courses.find((c) => c.id === id);
         if (target && target.instructorId !== actor.id) {
           throw new LocalApiError("حذف دوره سایر مدرسان مجاز نیست.", 403);
         }
       }
+      await deleteSupabaseCourse(id);
       db.courses = db.courses.filter((c) => c.id !== id);
       db.enrollments = db.enrollments.filter((e) => e.courseId !== id);
       db.reviews = db.reviews.filter((r) => r.courseId !== id);
@@ -2816,6 +3368,7 @@ export async function dispatchLocalApiRequest<T>(
       description: description ? String(description).trim() : null,
     };
     db.categories.push(cat);
+    await upsertSupabaseCategory(cat);
     writeLocalDb(db, storage);
     return { category: cat } as T;
   }
@@ -2838,10 +3391,12 @@ export async function dispatchLocalApiRequest<T>(
             ? String(description).trim()
             : db.categories[idx].description,
       };
+      await upsertSupabaseCategory(db.categories[idx]);
       writeLocalDb(db, storage);
       return { category: db.categories[idx] } as T;
     }
     if (method === "DELETE") {
+      await deleteSupabaseCategory(id);
       db.categories = db.categories.filter((c) => c.id !== id);
       writeLocalDb(db, storage);
       return { ok: true } as T;
@@ -2851,6 +3406,7 @@ export async function dispatchLocalApiRequest<T>(
   // --- ADMIN COUPONS ---
   if (method === "GET" && pathname === "/api/admin/coupons") {
     requireAdminUser(db, storage, headers);
+    await hydrateCatalogFromSupabase(db, storage);
     return { coupons: db.discountCodes } as T;
   }
 
@@ -2876,6 +3432,7 @@ export async function dispatchLocalApiRequest<T>(
       createdAt: new Date().toISOString(),
     };
     db.discountCodes.unshift(coupon);
+    await upsertSupabaseDiscountCode(coupon);
     writeLocalDb(db, storage);
     return { coupon } as T;
   }
@@ -2888,10 +3445,12 @@ export async function dispatchLocalApiRequest<T>(
       const idx = db.discountCodes.findIndex((d) => d.id === id);
       if (idx === -1) throw new LocalApiError("کد تخفیف یافت نشد.", 404);
       db.discountCodes[idx].isActive = Boolean(body?.isActive);
+      await upsertSupabaseDiscountCode(db.discountCodes[idx]);
       writeLocalDb(db, storage);
       return { coupon: db.discountCodes[idx] } as T;
     }
     if (method === "DELETE") {
+      await deleteSupabaseDiscountCode(id);
       db.discountCodes = db.discountCodes.filter((d) => d.id !== id);
       writeLocalDb(db, storage);
       return { ok: true } as T;
@@ -3152,7 +3711,7 @@ export async function dispatchLocalApiRequest<T>(
     return { ok: true } as T;
   }
 
-  // --- ADMIN INSTRUCTOR APPLICATIONS ---
+  // --- ADMIN INSTRUCTOR APPLICATIONS & CONTENT MODERATION ---
   if (method === "GET" && pathname === "/api/admin/instructors") {
     requireAdminUser(db, storage, headers);
     const sbInst = await fetchAllSupabaseInstructors();
@@ -3168,6 +3727,7 @@ export async function dispatchLocalApiRequest<T>(
         status: (row.status === "approved" || row.status === "rejected"
           ? row.status
           : "pending") as InstructorStatus,
+        rejectionReason: row.rejection_reason ?? null,
         createdAt: row.created_at || new Date().toISOString(),
       }));
       return { instructors: merged } as T;
@@ -3187,14 +3747,19 @@ export async function dispatchLocalApiRequest<T>(
         : body?.status === "rejected"
           ? "rejected"
           : "pending";
+    const rejectionReason =
+      nextStatus === "rejected"
+        ? String(body?.rejectionReason ?? "").trim() || null
+        : null;
 
-    await updateSupabaseInstructorStatus(id, nextStatus);
+    await updateSupabaseInstructorStatus(id, nextStatus, rejectionReason);
     const idx = db.instructors.findIndex((i) => i.id === id);
     let targetEmail = String(body?.email || "").toLowerCase().trim();
     let targetUserId = String(body?.userId || "");
 
     if (idx !== -1) {
       db.instructors[idx].status = nextStatus;
+      db.instructors[idx].rejectionReason = rejectionReason;
       targetEmail = targetEmail || db.instructors[idx].email.toLowerCase();
       targetUserId = targetUserId || db.instructors[idx].userId;
     }
@@ -3216,7 +3781,142 @@ export async function dispatchLocalApiRequest<T>(
     writeLocalDb(db, storage);
     return {
       instructor:
-        idx !== -1 ? db.instructors[idx] : { id, status: nextStatus },
+        idx !== -1
+          ? db.instructors[idx]
+          : { id, status: nextStatus, rejectionReason },
+    } as T;
+  }
+
+  if (method === "GET" && pathname === "/api/admin/moderation") {
+    requireAdminUser(db, storage, headers);
+    await hydrateCatalogFromSupabase(db, storage);
+    const sbInst = await fetchAllSupabaseInstructors();
+    const instructors: InstructorApplication[] =
+      sbInst.ok && sbInst.data.length > 0
+        ? sbInst.data.map((row) => ({
+            id: String(row.id),
+            userId: String(row.user_id),
+            name: String(row.name),
+            email: String(row.email),
+            phone: row.phone ?? null,
+            specialty: String(row.specialty || "برنامه‌نویسی"),
+            bio: String(row.bio || ""),
+            status: (row.status === "approved" || row.status === "rejected"
+              ? row.status
+              : "pending") as InstructorStatus,
+            rejectionReason: row.rejection_reason ?? null,
+            createdAt: row.created_at || new Date().toISOString(),
+          }))
+        : db.instructors;
+
+    const submissions = [...db.contentSubmissions].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const pendingCourses = db.courses
+      .filter(
+        (c) => normalizeModerationStatus(c.moderationStatus, "approved") === "pending"
+      )
+      .map((c) => serializeCourseSummary(c, db));
+
+    const pendingInstructors = instructors.filter(
+      (i) => i.status === "pending"
+    ).length;
+    const pendingSubmissions = submissions.filter(
+      (s) => s.status === "pending"
+    ).length;
+    const orphanPendingCourses = pendingCourses.filter(
+      (pc) =>
+        !submissions.some(
+          (s) => s.courseId === pc.id && s.status === "pending"
+        )
+    ).length;
+    const pendingContent = pendingSubmissions + orphanPendingCourses;
+
+    return {
+      submissions,
+      pendingCourses,
+      instructors,
+      counts: {
+        pendingInstructors,
+        pendingContent,
+        totalPending: pendingInstructors + pendingContent,
+      },
+    } as T;
+  }
+
+  const adminModerationMatch = pathname.match(/^\/api\/admin\/moderation\/([^/]+)$/);
+  if (method === "PATCH" && adminModerationMatch) {
+    requireAdminUser(db, storage, headers);
+    const id = decodeURIComponent(adminModerationMatch[1]);
+    const nextStatus: ModerationStatus =
+      body?.status === "approved"
+        ? "approved"
+        : body?.status === "rejected"
+          ? "rejected"
+          : "pending";
+    const rejectionReason =
+      nextStatus === "rejected"
+        ? String(body?.rejectionReason ?? "").trim() ||
+          "محتوا نیاز به بازبینی و اصلاح پیش از انتشار دارد."
+        : null;
+    const now = new Date().toISOString();
+
+    const subIdx = db.contentSubmissions.findIndex((s) => s.id === id);
+    let targetCourseId =
+      subIdx !== -1 ? db.contentSubmissions[subIdx].courseId : id;
+    let updatedSubmission: ContentSubmissionItem | null = null;
+
+    if (subIdx !== -1) {
+      db.contentSubmissions[subIdx] = {
+        ...db.contentSubmissions[subIdx],
+        status: nextStatus,
+        rejectionReason,
+        reviewedAt: now,
+      };
+      updatedSubmission = db.contentSubmissions[subIdx];
+      await upsertSupabaseSubmission(updatedSubmission);
+    }
+
+    const courseIdx = db.courses.findIndex((c) => c.id === targetCourseId);
+    let updatedCourse: CourseSummary | null = null;
+    if (courseIdx !== -1) {
+      db.courses[courseIdx] = {
+        ...db.courses[courseIdx],
+        moderationStatus: nextStatus,
+        rejectionReason,
+        isPublished: nextStatus === "approved",
+        updatedAt: now,
+      };
+      await upsertSupabaseCourse(toSupabaseCourseRow(db.courses[courseIdx]));
+      updatedCourse = serializeCourseSummary(db.courses[courseIdx], db);
+
+      // Also sync any other pending submissions for the same course
+      for (let i = 0; i < db.contentSubmissions.length; i += 1) {
+        if (
+          db.contentSubmissions[i].courseId === targetCourseId &&
+          db.contentSubmissions[i].status === "pending" &&
+          i !== subIdx
+        ) {
+          db.contentSubmissions[i] = {
+            ...db.contentSubmissions[i],
+            status: nextStatus,
+            rejectionReason,
+            reviewedAt: now,
+          };
+          await upsertSupabaseSubmission(db.contentSubmissions[i]);
+        }
+      }
+    }
+
+    if (subIdx === -1 && courseIdx === -1) {
+      throw new LocalApiError("درخواست بررسی محتوا یافت نشد.", 404);
+    }
+
+    writeLocalDb(db, storage);
+    return {
+      submission: updatedSubmission,
+      course: updatedCourse,
     } as T;
   }
 
@@ -3417,6 +4117,14 @@ export async function dispatchLocalApiRequest<T>(
 
   // --- PLATFORM SETTINGS ---
   if (method === "GET" && pathname === "/api/settings") {
+    const remote = await fetchSupabaseSiteSettings();
+    if (remote.ok && remote.data) {
+      db.settings = mergePlatformSettings({
+        ...db.settings,
+        ...remote.data,
+      });
+      writeLocalDb(db, storage);
+    }
     return { settings: mergePlatformSettings(db.settings) } as T;
   }
 
@@ -3427,6 +4135,7 @@ export async function dispatchLocalApiRequest<T>(
       ...(body ?? {}),
     });
     db.settings = merged;
+    await saveSupabaseSiteSettings(merged);
     writeLocalDb(db, storage);
     return { settings: merged } as T;
   }
@@ -3434,6 +4143,7 @@ export async function dispatchLocalApiRequest<T>(
   if (method === "POST" && pathname === "/api/admin/settings/reset") {
     requireAdminUser(db, storage, headers);
     db.settings = { ...DEFAULT_PLATFORM_SETTINGS };
+    await saveSupabaseSiteSettings(db.settings);
     writeLocalDb(db, storage);
     return { settings: db.settings } as T;
   }

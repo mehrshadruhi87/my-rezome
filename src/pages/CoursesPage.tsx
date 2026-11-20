@@ -1,15 +1,24 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { getDictionary } from "../lib/i18n";
+import { localizeCategory } from "../lib/contentLocalization";
+import {
+  CODEACADEMY_REALTIME_EVENT,
+  type RealtimeSyncEventDetail,
+} from "../lib/realtimeSync";
 import { apiRequest } from "../lib/api";
 import { CourseCard } from "../components/course/CourseCard";
 import { CourseFilters } from "../components/course/CourseFilters";
-import { toPersianDigits } from "../utils/formatters";
+import { formatDigits } from "../utils/formatters";
 import type { CourseSummary } from "../types";
 import { BookOpen } from "lucide-react";
 
 export function CoursesPage() {
   const { categories } = useAuth();
+  const { language } = useUserPreferences();
+  const t = getDictionary(language);
   const { push } = useRouter();
   const searchParams = useSearchParams();
 
@@ -19,51 +28,72 @@ export function CoursesPage() {
 
   const queryString = searchParams.toString();
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
+  const loadCourses = useCallback(async () => {
     setError(null);
+    try {
+      const res = await apiRequest<{ courses: CourseSummary[] }>(
+        `/api/courses${queryString ? `?${queryString}` : ""}`
+      );
+      setCourses(res.courses);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : language === "en"
+            ? "Failed to load courses"
+            : "خطا در بارگذاری"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [queryString, language]);
 
-    apiRequest<{ courses: CourseSummary[] }>(
-      `/api/courses${queryString ? `?${queryString}` : ""}`
-    )
-      .then((res) => {
-        if (active) setCourses(res.courses);
-      })
-      .catch((err) => {
-        if (active)
-          setError(err instanceof Error ? err.message : "خطا در بارگذاری");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+  useEffect(() => {
+    setLoading(true);
+    void loadCourses();
+  }, [loadCourses]);
 
-    return () => {
-      active = false;
+  useEffect(() => {
+    const onRealtime = (ev: Event) => {
+      const detail = (ev as CustomEvent<RealtimeSyncEventDetail>).detail;
+      if (
+        !detail ||
+        detail.table === "courses" ||
+        detail.table === "course_reviews" ||
+        detail.table === "categories"
+      ) {
+        void loadCourses();
+      }
     };
-  }, [queryString]);
+    window.addEventListener(CODEACADEMY_REALTIME_EVENT, onRealtime);
+    return () => {
+      window.removeEventListener(CODEACADEMY_REALTIME_EVENT, onRealtime);
+    };
+  }, [loadCourses]);
 
   const activeCategorySlug = searchParams.get("category") || "";
-  const activeCategoryName =
-    categories.find((c) => c.slug === activeCategorySlug)?.name || "";
+  const matchedCategory = categories.find((c) => c.slug === activeCategorySlug);
+  const activeCategoryName = matchedCategory
+    ? localizeCategory(matchedCategory, language).name
+    : "";
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-10">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-300 dark:border-slate-800 pb-6">
         <div>
           <span className="text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
-            کاتالوگ دوره‌ها
+            {t.coursesPage.kicker}
           </span>
           <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
             {activeCategoryName
-              ? `دوره‌های تخصصی ${activeCategoryName}`
-              : "همه دوره‌های آموزش برنامه‌نویسی"}
+              ? `${t.coursesPage.titleCategoryPrefix} ${activeCategoryName}`
+              : t.coursesPage.titleAll}
           </h1>
         </div>
         <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
           {loading
-            ? "در حال جستجو..."
-            : `${toPersianDigits(courses.length)} دوره یافت شد`}
+            ? t.coursesPage.searching
+            : `${formatDigits(courses.length, language)} ${t.coursesPage.foundSuffix}`}
         </div>
       </div>
 
@@ -94,17 +124,17 @@ export function CoursesPage() {
                 <BookOpen className="h-7 w-7" />
               </div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                دوره‌ای مطابق با فیلترهای شما یافت نشد
+                {t.coursesPage.emptyTitle}
               </h2>
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                فیلترها را تغییر دهید یا عبارت جستجوی دیگری را امتحان کنید.
+                {t.coursesPage.emptySub}
               </p>
               <button
                 type="button"
                 onClick={() => push("/courses")}
                 className="btn-3d mt-5 rounded-xl px-5 py-2.5 text-xs font-bold"
               >
-                مشاهده همه دوره‌ها
+                {t.coursesPage.viewAll}
               </button>
             </div>
           ) : (

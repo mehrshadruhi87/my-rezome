@@ -1,12 +1,14 @@
 export type ThemeMode = "dark" | "light";
 export type AccentThemeId = "galaxy_blue" | "emerald_green" | "cyber_orange";
 export type MotionSpeedId = "off" | "slow" | "normal" | "fast";
+export type SiteLanguage = "fa" | "en";
 
 export interface UserPreferences {
   mode: ThemeMode;
   accent: AccentThemeId;
   fontSize: number;
   motionSpeed: MotionSpeedId;
+  language: SiteLanguage;
 }
 
 export interface AccentThemeConfig {
@@ -38,6 +40,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   accent: "galaxy_blue",
   fontSize: 16,
   motionSpeed: "normal",
+  language: "fa",
 };
 
 export const ACCENT_THEMES: Record<AccentThemeId, AccentThemeConfig> = {
@@ -164,7 +167,9 @@ export function sanitizeUserPreferences(
       )
     : DEFAULT_USER_PREFERENCES.fontSize;
 
-  return { mode, accent, fontSize, motionSpeed };
+  const language: SiteLanguage = src.language === "en" ? "en" : "fa";
+
+  return { mode, accent, fontSize, motionSpeed, language };
 }
 
 export function loadUserPreferences(
@@ -243,4 +248,7 @@ export function applyUserPreferencesToDocument(prefs: UserPreferences): void {
   root.dataset.themeMode = normalized.mode;
   root.dataset.themeAccent = normalized.accent;
   root.dataset.motionSpeed = normalized.motionSpeed;
+  root.dataset.language = normalized.language;
+  root.dir = normalized.language === "en" ? "ltr" : "rtl";
+  root.lang = normalized.language;
 }

@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { Link, useRouter, useSearchParams } from "../router";
 import { useAuth } from "../context/AuthContext";
 import { useStore } from "../store/useStore";
-import { ApiError, apiRequest } from "../lib/api";
+import { apiRequest } from "../lib/api";
+import { syncSupabaseAuthSessionToLocalStore } from "../lib/localBackend";
+import { supabase } from "../lib/supabase";
+import { AuthLoadingGate } from "../components/auth/AuthLoadingGate";
 import {
   formatPersianDate,
   formatToman,
@@ -46,7 +49,13 @@ interface EnrolledCourse extends CourseSummary {
 }
 
 export function DashboardPage() {
-  const { user, loading: authLoading, setUser } = useAuth();
+  const {
+    user,
+    isAuthLoading,
+    setUser,
+    updateUserPassword,
+    logout,
+  } = useAuth();
   const { wishlist, toggleWishlist, addToCart } = useStore();
   const searchParams = useSearchParams();
   const { push } = useRouter();
@@ -104,9 +113,13 @@ export function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (isAuthLoading || !user) return;
     let active = true;
     setLoadingData(true);
+    setProfileName((prev) => prev || user.name);
+    setProfilePhone((prev) => prev || user.phone || "");
+    setProfileBio((prev) => prev || user.bio || "");
+    syncSupabaseAuthSessionToLocalStore(user);
     apiRequest<{
       user: PublicUser;
       enrolledCourses: EnrolledCourse[];
@@ -122,12 +135,10 @@ export function DashboardPage() {
       })
       .catch((err) => {
         if (!active) return;
+        // Never force-logout the active Supabase Auth user on secondary API 401/404 errors
         toast.error(
           err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات پنل"
         );
-        if (err instanceof ApiError && err.status === 401) {
-          setUser(null);
-        }
       })
       .finally(() => {
         if (active) setLoadingData(false);
@@ -135,20 +146,16 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [isAuthLoading, user]);
 
   useEffect(() => {
-    if (user && activeTab === "profile") {
+    if (!isAuthLoading && user && activeTab === "profile") {
       loadSessions();
     }
-  }, [user, activeTab]);
+  }, [isAuthLoading, user, activeTab]);
 
-  if (authLoading) {
-    return (
-      <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-10">
-        <div className="h-64 rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E2E8F0] dark:bg-slate-900/50 animate-pulse" />
-      </div>
-    );
+  if (isAuthLoading) {
+    return <AuthLoadingGate message="در حال بارگذاری پنل کاربری..." />;
   }
 
   if (!user) {
@@ -177,10 +184,21 @@ export function DashboardPage() {
     e.preventDefault();
     setSavingProfile(true);
     try {
+      const trimmedName = profileName.trim();
+      const { error: sbError } = await supabase.auth.updateUser({
+        data: {
+          full_name: trimmedName,
+          phone: profilePhone.trim(),
+          bio: profileBio.trim(),
+        },
+      });
+      if (sbError) {
+        throw new Error(sbError.message);
+      }
       const res = await apiRequest<{ user: PublicUser }>("/api/profile", {
         method: "PUT",
         body: JSON.stringify({
-          name: profileName,
+          name: trimmedName,
           phone: profilePhone,
           bio: profileBio,
         }),
@@ -246,10 +264,7 @@ export function DashboardPage() {
     e.preventDefault();
     setChangingPassword(true);
     try {
-      await apiRequest("/api/auth/password/change", {
-        method: "PATCH",
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
+      await updateUserPassword(newPassword);
       setCurrentPassword("");
       setNewPassword("");
       toast.success("رمز عبور شما با موفقیت تغییر یافت.");
@@ -264,12 +279,12 @@ export function DashboardPage() {
 
   const handleRevokeSession = async (sessionId: string, isCurrent: boolean) => {
     try {
-      await apiRequest(`/api/auth/sessions/${sessionId}`, { method: "DELETE" });
       if (isCurrent) {
-        setUser(null);
+        await logout();
         toast.info("نشست فعلی بسته شد.");
         return;
       }
+      await apiRequest(`/api/auth/sessions/${sessionId}`, { method: "DELETE" });
       toast.success("نشست با موفقیت بسته شد.");
       await loadSessions();
     } catch (err) {
@@ -279,8 +294,7 @@ export function DashboardPage() {
 
   const handleLogoutAllSessions = async () => {
     try {
-      await apiRequest("/api/auth/logout-all", { method: "POST" });
-      setUser(null);
+      await logout();
       toast.success("تمامی نشست‌های فعال بسته شدند.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "خطا");

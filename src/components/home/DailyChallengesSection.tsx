@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
+import { getDictionary } from "../../lib/i18n";
+import {
+  localizeChallenge,
+  localizeRankInfo,
+} from "../../lib/contentLocalization";
 import {
   DAILY_CHALLENGES,
   type ChallengeEvaluationResult,
@@ -14,7 +19,7 @@ import {
   loadChallengeProgress,
   saveChallengeProgress,
 } from "../../utils/interactiveCoding";
-import { toPersianDigits } from "../../utils/formatters";
+import { formatDigits } from "../../utils/formatters";
 import {
   Award,
   Calendar,
@@ -29,7 +34,10 @@ import {
 } from "lucide-react";
 
 export function DailyChallengesSection() {
-  const { motionDuration } = useUserPreferences();
+  const { motionDuration, language, isRtl } = useUserPreferences();
+  const t = getDictionary(language);
+  const isEn = language === "en";
+
   const todayKey = useMemo(() => getTodayDateKey(), []);
   const todaysChallenges = useMemo(
     () => getDailyChallengesForDate(todayKey, 4),
@@ -37,7 +45,13 @@ export function DailyChallengesSection() {
   );
 
   const [showAllPool, setShowAllPool] = useState(false);
-  const visibleChallenges = showAllPool ? DAILY_CHALLENGES : todaysChallenges;
+  const rawVisibleChallenges = showAllPool
+    ? DAILY_CHALLENGES
+    : todaysChallenges;
+  const visibleChallenges = useMemo(
+    () => rawVisibleChallenges.map((c) => localizeChallenge(c, language)),
+    [rawVisibleChallenges, language]
+  );
 
   const [progress, setProgress] = useState<ChallengeProgressState>(() =>
     loadChallengeProgress()
@@ -46,11 +60,31 @@ export function DailyChallengesSection() {
   const [codeByChallenge, setCodeByChallenge] = useState<
     Record<string, string>
   >(() =>
-    Object.fromEntries(DAILY_CHALLENGES.map((c) => [c.id, c.starterCode]))
+    Object.fromEntries(
+      DAILY_CHALLENGES.map((c) => [
+        c.id,
+        localizeChallenge(c, language).starterCode,
+      ])
+    )
   );
   const [showHint, setShowHint] = useState(false);
   const [evaluation, setEvaluation] =
     useState<ChallengeEvaluationResult | null>(null);
+
+  useEffect(() => {
+    setCodeByChallenge((prev) => {
+      const next: Record<string, string> = { ...prev };
+      for (const raw of DAILY_CHALLENGES) {
+        const faStarter = localizeChallenge(raw, "fa").starterCode;
+        const enStarter = localizeChallenge(raw, "en").starterCode;
+        const current = prev[raw.id];
+        if (!current || current === faStarter || current === enStarter) {
+          next[raw.id] = language === "en" ? enStarter : faStarter;
+        }
+      }
+      return next;
+    });
+  }, [language]);
 
   useEffect(() => {
     saveChallengeProgress(progress);
@@ -61,11 +95,11 @@ export function DailyChallengesSection() {
   const currentCode =
     codeByChallenge[activeChallenge.id] ?? activeChallenge.starterCode;
   const isSolved = progress.solvedIds.includes(activeChallenge.id);
-  const rank = getRankInfo(progress.xp);
+  const rank = localizeRankInfo(getRankInfo(progress.xp), language);
 
-  const persianTodayLabel = useMemo(() => {
+  const todayLabel = useMemo(() => {
     try {
-      return new Intl.DateTimeFormat("fa-IR", {
+      return new Intl.DateTimeFormat(isEn ? "en-US" : "fa-IR", {
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -73,7 +107,7 @@ export function DailyChallengesSection() {
     } catch {
       return todayKey;
     }
-  }, [todayKey]);
+  }, [todayKey, isEn]);
 
   const handleSelectChallenge = (id: string) => {
     setActiveId(id);
@@ -111,22 +145,32 @@ export function DailyChallengesSection() {
       if (newlySolved) {
         setProgress(next);
         toast.success(
-          `آفرین! چالش «${activeChallenge.title}» حل شد و ${toPersianDigits(
-            activeChallenge.xp
-          )} امتیاز XP دریافت کردید.`
+          isEn
+            ? `Well done! Solved "${activeChallenge.title}" and earned +${activeChallenge.xp} XP.`
+            : `آفرین! چالش «${activeChallenge.title}» حل شد و ${formatDigits(
+                activeChallenge.xp,
+                language
+              )} امتیاز XP دریافت کردید.`
         );
       } else {
         toast.info(
-          "تمام تست‌ها با موفقیت پاس شدند (امتیاز این چالش قبلاً ثبت شده است)."
+          isEn
+            ? "All test cases passed! (XP for this challenge was already claimed.)"
+            : "تمام تست‌ها با موفقیت پاس شدند (امتیاز این چالش قبلاً ثبت شده است)."
         );
       }
     } else {
       toast.error(
         result.runtimeError
-          ? `خطا در بررسی کد: ${result.runtimeError}`
-          : `${toPersianDigits(result.passedCount)} از ${toPersianDigits(
-              result.totalCount
-            )} تست پاس شد. کد را دوباره بررسی کنید.`
+          ? isEn
+            ? `Execution error: ${result.runtimeError}`
+            : `خطا در بررسی کد: ${result.runtimeError}`
+          : isEn
+            ? `${result.passedCount} of ${result.totalCount} tests passed. Review your code and retry.`
+            : `${formatDigits(result.passedCount, language)} از ${formatDigits(
+                result.totalCount,
+                language
+              )} تست پاس شد. کد را دوباره بررسی کنید.`
       );
     }
   };
@@ -142,12 +186,8 @@ export function DailyChallengesSection() {
   };
 
   return (
-    <motion.section
+    <section
       id="challenges"
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.1 }}
-      transition={{ duration: motionDuration(0.45) }}
       className="scroll-mt-24 mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-10"
     >
       {/* Header + Gamified Scoreboard Strip */}
@@ -156,46 +196,56 @@ export function DailyChallengesSection() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
               <Trophy className="h-4 w-4" />
-              <span>تمرین الگوریتم و ارتقای رتبه</span>
+              <span>{t.challenges.kicker}</span>
             </span>
             <span
               data-testid="daily-challenge-date"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-[#E9EFF6] dark:bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-300"
             >
               <Calendar className="h-3.5 w-3.5 text-[var(--accent-500)]" />
-              <span>بسته روزانه {persianTodayLabel}</span>
+              <span>
+                {isEn ? `Daily Pack · ${todayLabel}` : `بسته روزانه ${todayLabel}`}
+              </span>
             </span>
           </div>
           <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
-            سیستم امتیازدهی و چالش‌های روزانه
+            {t.challenges.title}
           </h2>
           <p className="mt-2 max-w-2xl text-xs sm:text-sm text-slate-700 dark:text-slate-400">
-            چالش‌ها هر روز به‌صورت خودکار به‌روزرسانی می‌شوند. پاسخ خود را بنویسید، با تست‌های خودکار اعتبارسنجی شوید و امتیاز XP و استریک خود را افزایش دهید.
+            {t.challenges.subtitle}
           </p>
         </div>
 
         {/* Live XP / Rank / Streak Cards */}
         <div className="grid grid-cols-3 gap-2.5 sm:gap-3 lg:min-w-[440px]">
-          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+          <div
+            className={`cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 ${
+              isRtl ? "text-right" : "text-left"
+            }`}
+          >
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
               <Sparkles className="h-3.5 w-3.5 text-[var(--accent-500)]" />
-              <span>امتیاز کل</span>
+              <span>{t.challenges.xpLabel}</span>
             </div>
             <div
               data-testid="challenges-xp-score"
               className="mt-1 text-lg font-black text-slate-900 dark:text-white tabular-nums"
             >
-              {toPersianDigits(progress.xp)}{" "}
+              {formatDigits(progress.xp, language)}{" "}
               <span className="text-xs font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)]">
                 XP
               </span>
             </div>
           </div>
 
-          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+          <div
+            className={`cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 ${
+              isRtl ? "text-right" : "text-left"
+            }`}
+          >
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
               <Award className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
-              <span>رتبه شما</span>
+              <span>{isEn ? "Your Rank" : "رتبه شما"}</span>
             </div>
             <div
               data-testid="challenges-rank-title"
@@ -205,15 +255,19 @@ export function DailyChallengesSection() {
             </div>
           </div>
 
-          <div className="cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 text-right">
+          <div
+            className={`cyber-glow-card rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/75 px-3.5 py-3 ${
+              isRtl ? "text-right" : "text-left"
+            }`}
+          >
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400">
               <Flame className="h-3.5 w-3.5 text-amber-500" />
-              <span>استریک</span>
+              <span>{isEn ? "Streak" : "استریک"}</span>
             </div>
             <div className="mt-1 text-lg font-black text-slate-900 dark:text-white tabular-nums">
-              {toPersianDigits(progress.streak)}{" "}
+              {formatDigits(progress.streak, language)}{" "}
               <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                روز
+                {isEn ? "days" : "روز"}
               </span>
             </div>
           </div>
@@ -224,16 +278,19 @@ export function DailyChallengesSection() {
       <div className="mb-6 rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/60 px-5 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold tabular-nums">
           <span className="text-slate-800 dark:text-slate-300">
-            چالش‌های حل‌شده:{" "}
+            {isEn ? "Solved Challenges:" : "چالش‌های حل‌شده:"}{" "}
             <strong className="text-[var(--accent-600)] dark:text-[var(--accent-400)]">
-              {toPersianDigits(progress.solvedIds.length)} از{" "}
-              {toPersianDigits(DAILY_CHALLENGES.length)}
+              {formatDigits(progress.solvedIds.length, language)}{" "}
+              {isEn ? "of" : "از"}{" "}
+              {formatDigits(DAILY_CHALLENGES.length, language)}
             </strong>
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-slate-600 dark:text-slate-400">
-              مسیر ارتقا به «{rank.nextRankTitle}»:{" "}
-              {toPersianDigits(rank.progressPercent)}٪
+              {t.challenges.nextRankPrefix}{" "}
+              {isEn ? `"${rank.nextRankTitle}"` : `«${rank.nextRankTitle}»`}:{" "}
+              {formatDigits(rank.progressPercent, language)}
+              {isEn ? "%" : "٪"}
             </span>
             <button
               type="button"
@@ -241,8 +298,12 @@ export function DailyChallengesSection() {
               className="rounded-lg border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-[var(--accent-600)] dark:text-[var(--accent-400)] hover:border-[var(--accent-500)] transition-colors"
             >
               {showAllPool
-                ? "نمایش چالش‌های منتخب امروز (۴)"
-                : `مشاهده کل آرشیو (${toPersianDigits(DAILY_CHALLENGES.length)})`}
+                ? isEn
+                  ? "Show Today's Picks (4)"
+                  : "نمایش چالش‌های منتخب امروز (۴)"
+                : isEn
+                  ? `View Full Archive (${DAILY_CHALLENGES.length})`
+                  : `مشاهده کل آرشیو (${formatDigits(DAILY_CHALLENGES.length, language)})`}
             </button>
           </div>
         </div>
@@ -258,7 +319,7 @@ export function DailyChallengesSection() {
 
       {/* Main Challenges Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Right Column: Challenge List */}
+        {/* Challenge List */}
         <div className="lg:col-span-4 space-y-3 max-h-[540px] overflow-y-auto custom-lab-scroll pl-1">
           {visibleChallenges.map((challenge, idx) => {
             const active = challenge.id === activeChallenge.id;
@@ -269,7 +330,9 @@ export function DailyChallengesSection() {
                 type="button"
                 onClick={() => handleSelectChallenge(challenge.id)}
                 data-testid={`challenge-item-${challenge.id}`}
-                className={`w-full rounded-2xl border p-4 text-right transition-all ${
+                className={`w-full rounded-2xl border p-4 ${
+                  isRtl ? "text-right" : "text-left"
+                } transition-all ${
                   active
                     ? "cyber-glow-card border-[var(--accent-500)] bg-[var(--accent-500)]/12 shadow-lg"
                     : "border-slate-300/90 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/70 hover:border-[var(--accent-500)]/50"
@@ -282,21 +345,21 @@ export function DailyChallengesSection() {
                         challenge.difficulty
                       )}`}
                     >
-                      {challenge.difficulty}
+                      {challenge.displayDifficulty}
                     </span>
                     {!showAllPool && idx === 0 && (
                       <span className="rounded-lg bg-[var(--accent-500)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-700)] dark:text-[var(--accent-300)]">
-                        ویژه امروز
+                        {isEn ? "Featured Today" : "ویژه امروز"}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black text-[var(--accent-600)] dark:text-[var(--accent-400)] tabular-nums">
-                      +{toPersianDigits(challenge.xp)} XP
+                      +{formatDigits(challenge.xp, language)} XP
                     </span>
                     {solved && (
                       <CheckCircle2
-                        aria-label="حل شده"
+                        aria-label={t.challenges.solvedBadge}
                         className="h-4 w-4 text-emerald-500"
                       />
                     )}
@@ -313,7 +376,7 @@ export function DailyChallengesSection() {
           })}
         </div>
 
-        {/* Left Column: Active Challenge Workspace */}
+        {/* Active Challenge Workspace */}
         <div className="lg:col-span-8 cyber-glow-card overflow-hidden rounded-3xl border border-slate-300/90 dark:border-slate-800/90 bg-[#E9EFF6]/95 dark:bg-slate-900/75 shadow-xl shadow-slate-900/5 dark:shadow-black/30 backdrop-blur-xl">
           {/* Problem Brief */}
           <div className="border-b border-slate-300 dark:border-slate-800 p-5 sm:p-6">
@@ -325,12 +388,13 @@ export function DailyChallengesSection() {
                 {isSolved && (
                   <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>تکمیل شده</span>
+                    <span>{t.challenges.solvedBadge}</span>
                   </span>
                 )}
               </div>
               <span className="rounded-lg bg-[var(--accent-500)]/15 px-3 py-1 text-xs font-black text-[var(--accent-700)] dark:text-[var(--accent-300)] tabular-nums">
-                جایزه: +{toPersianDigits(activeChallenge.xp)} XP
+                {isEn ? "Reward:" : "جایزه:"} +
+                {formatDigits(activeChallenge.xp, language)} XP
               </span>
             </div>
 
@@ -345,7 +409,9 @@ export function DailyChallengesSection() {
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:border-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
               >
                 <Lightbulb className="h-3.5 w-3.5" />
-                <span>{showHint ? "بستن راهنما" : "نمایش راهنما"}</span>
+                <span>
+                  {showHint ? t.challenges.hideHint : t.challenges.showHint}
+                </span>
               </button>
               <button
                 type="button"
@@ -354,7 +420,7 @@ export function DailyChallengesSection() {
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:border-[var(--accent-500)]/60 hover:text-[var(--accent-600)] dark:hover:text-[var(--accent-400)] transition-colors"
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>بارگذاری پاسخ نمونه</span>
+                <span>{t.challenges.showSolution}</span>
               </button>
               <button
                 type="button"
@@ -362,13 +428,13 @@ export function DailyChallengesSection() {
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-[#F1F5F9] dark:bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition-colors"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>کد اولیه</span>
+                <span>{t.challenges.resetCode}</span>
               </button>
             </div>
 
             {showHint && (
               <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
-                <strong>راهنما: </strong>
+                <strong>{isEn ? "Hint: " : "راهنما: "}</strong>
                 {activeChallenge.hint}
               </div>
             )}
@@ -381,12 +447,18 @@ export function DailyChallengesSection() {
                 {activeChallenge.functionName}.js
               </span>
               <span className="font-sans">
-                پاسخ خود را بنویسید و روی «بررسی و ارسال» کلیک کنید
+                {isEn
+                  ? 'Write your solution and click "Run Automated Tests"'
+                  : "پاسخ خود را بنویسید و روی «اجرا و بررسی تست‌ها» کلیک کنید"}
               </span>
             </div>
             <textarea
               dir="ltr"
-              aria-label="ویرایشگر کد چالش روزانه"
+              aria-label={
+                isEn
+                  ? "Daily coding challenge editor"
+                  : "ویرایشگر کد چالش روزانه"
+              }
               data-testid="challenge-editor"
               value={currentCode}
               onChange={(e) => handleCodeChange(e.target.value)}
@@ -400,8 +472,12 @@ export function DailyChallengesSection() {
           <div className="border-t border-slate-300 dark:border-slate-800 p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-slate-700 dark:text-slate-400 tabular-nums">
-                شامل {toPersianDigits(activeChallenge.testCases.length)} تست
-                خودکار اعتبارسنجی
+                {isEn
+                  ? `Includes ${activeChallenge.testCases.length} automated validation tests`
+                  : `شامل ${formatDigits(
+                      activeChallenge.testCases.length,
+                      language
+                    )} تست خودکار اعتبارسنجی`}
               </div>
               <button
                 type="button"
@@ -410,7 +486,7 @@ export function DailyChallengesSection() {
                 className="btn-3d inline-flex items-center gap-2 rounded-xl bg-[var(--accent-600)] px-5 py-2.5 text-xs font-bold text-white hover:bg-[var(--accent-500)] transition-all"
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
-                <span>بررسی و ارسال پاسخ</span>
+                <span>{t.challenges.runTests}</span>
               </button>
             </div>
 
@@ -428,12 +504,16 @@ export function DailyChallengesSection() {
                     }
                   >
                     {evaluation.allPassed
-                      ? "همه تست‌ها با موفقیت پاس شدند!"
-                      : `${toPersianDigits(
-                          evaluation.passedCount
-                        )} از ${toPersianDigits(
-                          evaluation.totalCount
-                        )} تست موفق`}
+                      ? t.challenges.allPassed
+                      : isEn
+                        ? `${evaluation.passedCount} of ${evaluation.totalCount} tests passed`
+                        : `${formatDigits(
+                            evaluation.passedCount,
+                            language
+                          )} از ${formatDigits(
+                            evaluation.totalCount,
+                            language
+                          )} تست موفق`}
                   </span>
                   <span
                     dir="ltr"
@@ -481,6 +561,6 @@ export function DailyChallengesSection() {
           </div>
         </div>
       </div>
-    </motion.section>
+    </section>
   );
 }

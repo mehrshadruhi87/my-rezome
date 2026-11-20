@@ -12,6 +12,8 @@ export type OrderStatus =
   | "CANCELLED";
 
 export type InstructorStatus = "pending" | "approved" | "rejected";
+export type ModerationStatus = "pending" | "approved" | "rejected";
+export type SubmissionType = "course_create" | "course_edit" | "lesson_upload";
 
 export interface PublicUser {
   id: string;
@@ -98,8 +100,11 @@ export interface CourseSummary {
   instructorTitle: string;
   studentsCount: number;
   rating: number;
+  reviewCount?: number;
   isPublished: boolean;
   isFeatured: boolean;
+  moderationStatus?: ModerationStatus;
+  rejectionReason?: string | null;
   categoryId: string;
   category: {
     id: string;
@@ -129,7 +134,24 @@ export interface InstructorApplication {
   specialty: string;
   bio: string;
   status: InstructorStatus;
+  rejectionReason?: string | null;
   createdAt: string;
+}
+
+export interface ContentSubmissionItem {
+  id: string;
+  type: SubmissionType;
+  courseId: string;
+  courseTitle: string;
+  instructorId: string;
+  instructorName: string;
+  instructorEmail: string;
+  summary: string;
+  status: ModerationStatus;
+  rejectionReason: string | null;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+  reviewedAt?: string | null;
 }
 
 export interface NewsArticle {

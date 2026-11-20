@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 import type {
   ChapterItem,
   CourseDetail,
@@ -9,6 +10,7 @@ import type {
 import { toPersianDigits } from "../../utils/formatters";
 import { toast } from "sonner";
 import {
+  Clock,
   Download,
   FileUp,
   Film,
@@ -29,6 +31,8 @@ export function AdminMediaUploadManager({
   courses,
   onSaved,
 }: AdminMediaUploadManagerProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [selectedCourseId, setSelectedCourseId] = useState<string>(
     courses[0]?.id || ""
   );
@@ -193,15 +197,24 @@ export function AdminMediaUploadManager({
     if (!courseDetail) return;
     setSaving(true);
     try {
-      await apiRequest(`/api/admin/courses/${courseDetail.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          ...courseDetail,
-          categoryId: courseDetail.category?.id,
-          chapters,
-        }),
-      });
-      toast.success("ویدیوها و فایل‌های ضمیمه دوره با موفقیت ذخیره شدند.");
+      const res = await apiRequest<{ pendingApproval?: boolean }>(
+        `/api/admin/courses/${courseDetail.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ...courseDetail,
+            categoryId: courseDetail.category?.id,
+            chapters,
+          }),
+        }
+      );
+      if (res.pendingApproval || !isAdmin) {
+        toast.success(
+          "ویدیوها و فایل‌های ضمیمه ذخیره شد و با وضعیت «در انتظار تأیید مدیر» در صف انتشار قرار گرفت."
+        );
+      } else {
+        toast.success("ویدیوها و فایل‌های ضمیمه دوره با موفقیت ذخیره و منتشر شدند.");
+      }
       await onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "خطا در ذخیره فایل‌ها");
@@ -212,6 +225,16 @@ export function AdminMediaUploadManager({
 
   return (
     <div className="space-y-6">
+      {!isAdmin && (
+        <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200">
+          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <span>
+            تمام ویدیوها و فایل‌های آپلودشده توسط مدرسین با وضعیت{" "}
+            <strong>«در انتظار تأیید مدیر»</strong> ثبت می‌شوند و بلافاصله پس از تأیید مدیر کل در سایت منتشر خواهند شد.
+          </span>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-300 dark:border-slate-800 bg-[#E9EFF6] dark:bg-slate-900/80 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
